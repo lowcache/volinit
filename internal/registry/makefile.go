@@ -12,9 +12,9 @@ type Action struct {
 	Section     string
 }
 
-// targetLine matches `## :name: ....: description` — the dots are decorative
-// and variable in length, so they are consumed rather than counted.
-var targetLine = regexp.MustCompile(`^##\s*:([A-Za-z0-9_-]+):\s*\.*\s*:\s*(.+?)\s*$`)
+// targetLine matches both `## :name: ....: description` and `## name: ---: description` —
+// the leading colon and separator run (dots or dashes) are decorative and consumed.
+var targetLine = regexp.MustCompile(`^##\s*:?([A-Za-z0-9_-]+):\s*[.-]*\s*:\s*(.+?)\s*$`)
 
 // sectionLine matches `## Section Name` but not a target line, which is why
 // this is applied only after targetLine fails.

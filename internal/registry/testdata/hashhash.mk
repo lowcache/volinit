@@ -11,3 +11,11 @@ build:
 ## :anon-arm: ..........: Arm anonymous mode
 anon-arm:
 	@echo arming
+
+## Blog Operations
+## serve: -----: Development server at localhost
+serve:
+	hugo server
+## deploy: -----: Deploy to production
+deploy:
+	hugo deploy
