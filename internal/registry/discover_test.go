@@ -58,10 +58,29 @@ func TestDiscoverClassifiesBranches(t *testing.T) {
 	}
 }
 
-func TestDiscoverSkipsRepoWithNoActions(t *testing.T) {
+// The spec requires bare target enumeration for Makefiles using neither
+// documented dialect; four fleet repos have no annotations at all and would
+// otherwise be invisible.
+func TestDiscoverFallsBackToBareTargets(t *testing.T) {
 	root := t.TempDir()
-	writeMakefile(t, filepath.Join(root, "bare"), "all:\n\techo hi\n")
+	writeMakefile(t, filepath.Join(root, "bare"), "VER := 1\n.PHONY: all\nall: test\n\techo hi\ntest:\n\techo t\n")
+	repos := Discover([]string{root})
+	if len(repos) != 1 {
+		t.Fatalf("got %d repos, want 1 — an undocumented Makefile still has runnable targets", len(repos))
+	}
+	var names []string
+	for _, a := range repos[0].Actions {
+		names = append(names, a.Name)
+	}
+	if len(names) != 2 || names[0] != "all" || names[1] != "test" {
+		t.Errorf("bare actions = %v, want [all test] — VER := and .PHONY are not targets", names)
+	}
+}
+
+func TestDiscoverSkipsMakefileWithNoTargets(t *testing.T) {
+	root := t.TempDir()
+	writeMakefile(t, filepath.Join(root, "empty"), "VER := 1\nexport VER\n")
 	if repos := Discover([]string{root}); len(repos) != 0 {
-		t.Fatalf("got %d repos, want 0 — a Makefile with no documented targets is not worth a menu entry", len(repos))
+		t.Fatalf("got %d repos, want 0 — a Makefile with no targets has nothing to run", len(repos))
 	}
 }

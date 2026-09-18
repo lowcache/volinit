@@ -53,9 +53,15 @@ func Discover(roots []string) []Repo {
 			if readErr != nil {
 				return nil
 			}
+			// Documented dialects first; a Makefile using neither still
+			// contributes its plain targets rather than vanishing from the
+			// cockpit. Only a Makefile with no targets at all is dropped.
 			actions := ParseHashHash(string(src))
 			if len(actions) == 0 {
 				actions = ParseHelpTarget(string(src))
+			}
+			if len(actions) == 0 {
+				actions = ParseBareTargets(string(src))
 			}
 			if len(actions) == 0 {
 				return nil

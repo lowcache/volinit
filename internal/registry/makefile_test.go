@@ -160,3 +160,30 @@ func TestTargetLineRegexBothForms(t *testing.T) {
 		})
 	}
 }
+
+
+func TestParseBareTargetsRejectsNonTargets(t *testing.T) {
+	src := "VER := 1\n" +
+		"VER ?= 2\n" +
+		".PHONY: all build\n" +
+		"%.o: %.c\n" +
+		"\tcc -c $<\n" +
+		"# comment: not a target\n" +
+		"build: VER\n" +
+		"\techo build\n" +
+		"build:\n" +
+		"test-all:\n"
+	var got []string
+	for _, a := range ParseBareTargets(src) {
+		got = append(got, a.Name)
+	}
+	want := []string{"build", "test-all"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}

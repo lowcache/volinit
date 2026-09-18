@@ -78,3 +78,31 @@ func ParseHelpTarget(src string) []Action {
 	}
 	return out
 }
+
+// bareTarget matches a plain rule line — `name:` or `name: prereqs` — while
+// rejecting the shapes that only look like one: variable assignments (`:=`,
+// `::=`), recipe lines (tab-indented), pattern rules (`%`), and make's own
+// dot-prefixed special targets (`.PHONY`).
+var bareTarget = regexp.MustCompile(`^([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:([^=].*)?$`)
+
+// ParseBareTargets enumerates a Makefile's plain targets, with no
+// descriptions. It is the fallback the spec requires for Makefiles using
+// neither documented dialect (mobile-cacheflow, the claude-companion
+// plugins): without it those repos are invisible to the cockpit entirely.
+// Nothing is executed; this reads the same text the other two parsers do.
+func ParseBareTargets(src string) []Action {
+	var out []Action
+	seen := map[string]bool{}
+	for _, line := range strings.Split(src, "\n") {
+		if line == "" || line[0] == '\t' || line[0] == '#' {
+			continue
+		}
+		m := bareTarget.FindStringSubmatch(line)
+		if m == nil || seen[m[1]] {
+			continue
+		}
+		seen[m[1]] = true
+		out = append(out, Action{Name: m[1]})
+	}
+	return out
+}
