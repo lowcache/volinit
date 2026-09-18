@@ -28,6 +28,8 @@ func press(t *testing.T, m Model, k tea.KeyPressMsg) Model {
 
 func typed(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Text: string(r)} }
 
+func boolp(b bool) *bool { return &b }
+
 var enter = tea.KeyPressMsg{Code: tea.KeyEnter}
 
 // keyPress builds a tea.KeyPressMsg by name, reusing the same construction
@@ -248,7 +250,7 @@ func TestEnterCollectsParamBeforeRunning(t *testing.T) {
 
 func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
-		{Name: "switch", Detach: true},
+		{Name: "switch", Detach: true, Gate: boolp(false)},
 	}}}, theme.Default(), nil))
 
 	next, cmd := m.Update(enter)
@@ -257,6 +259,68 @@ func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 	}
 	if got := next.(Model).status; !strings.Contains(got, "detached") {
 		t.Errorf("status = %q, want it to report the detached start", got)
+	}
+}
+
+func TestUnflaggedActionRunsImmediately(t *testing.T) {
+	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "build"},
+	}}}, theme.Default(), nil))
+
+	next, cmd := m.Update(enter)
+	if cmd == nil {
+		t.Fatal("unflagged action produced no command")
+	}
+	if next.(Model).mode != modeList {
+		t.Errorf("mode = %v, want modeList", next.(Model).mode)
+	}
+}
+
+func TestHeuristicGatedActionShowsConfirmPrompt(t *testing.T) {
+	m := dismiss(New([]registry.Repo{{Name: "nix-config", Path: "/tmp/nix", Actions: []registry.Action{
+		{Name: "deploy"},
+	}}}, theme.Default(), nil))
+
+	next, cmd := m.Update(enter)
+	m = next.(Model)
+	if cmd != nil {
+		t.Fatal("heuristic-gated action ran without confirmation")
+	}
+	if m.mode != modeConfirm {
+		t.Fatalf("mode = %v, want modeConfirm", m.mode)
+	}
+	// The list row already names repo and action, so assert on the prompt itself.
+	if got, want := m.footer(), "run deploy in nix-config? [y/N]"; got != want {
+		t.Errorf("confirm prompt = %q, want %q", got, want)
+	}
+}
+
+func TestGateFalseBypassesHeuristic(t *testing.T) {
+	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "deploy", Gate: boolp(false)},
+	}}}, theme.Default(), nil))
+
+	next, cmd := m.Update(enter)
+	if cmd == nil {
+		t.Fatal("Gate=false should bypass and run immediately")
+	}
+	if next.(Model).mode != modeList {
+		t.Errorf("mode = %v, want modeList", next.(Model).mode)
+	}
+}
+
+func TestGateTrueForcesConfirm(t *testing.T) {
+	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "build", Gate: boolp(true)},
+	}}}, theme.Default(), nil))
+
+	next, cmd := m.Update(enter)
+	m = next.(Model)
+	if cmd != nil {
+		t.Fatal("Gate=true should not run without confirmation")
+	}
+	if m.mode != modeConfirm {
+		t.Fatalf("mode = %v, want modeConfirm", m.mode)
 	}
 }
 

@@ -161,10 +161,10 @@ func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// gate opens the confirmation prompt when the action declares one, and
+// gate opens the confirmation prompt when the action is gated, and
 // otherwise runs. It is the last thing between a keypress and execution.
 func (m Model) gate() (tea.Model, tea.Cmd) {
-	if m.rows[m.cursor].action.Confirm != "" {
+	if m.rows[m.cursor].action.Gated() {
 		m.mode = modeConfirm
 		return m, nil
 	}
@@ -297,7 +297,12 @@ func (m Model) footer() string {
 		}
 		return fmt.Sprintf("%s: %s_   enter runs · esc cancels", prompt, m.param)
 	case modeConfirm:
-		return m.rows[m.cursor].action.Confirm + " [y/N]"
+		a := m.rows[m.cursor].action
+		prompt := a.Confirm
+		if prompt == "" {
+			prompt = fmt.Sprintf("run %s in %s?", a.Name, m.rows[m.cursor].repo)
+		}
+		return prompt + " [y/N]"
 	}
 	if len(m.rows) == 0 {
 		return "q quits"

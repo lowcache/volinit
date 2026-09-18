@@ -11,6 +11,7 @@ import (
 
 // sidecarEntry mirrors one table in .volinit/actions.toml.
 type sidecarEntry struct {
+	Gate    *bool  `toml:"gate"`
 	Confirm string `toml:"confirm"`
 	Sudo    bool   `toml:"sudo"`
 	Detach  bool   `toml:"detach"`
@@ -43,6 +44,7 @@ func ApplySidecar(r *Repo) error {
 		if !ok {
 			continue
 		}
+		r.Actions[i].Gate = e.Gate
 		r.Actions[i].Confirm = e.Confirm
 		r.Actions[i].Sudo = e.Sudo
 		r.Actions[i].Detach = e.Detach
@@ -79,24 +81,47 @@ var dangerous = []string{
 	"split",    // split operations (e.g. history splits)
 }
 
-// Doctor reports actions that lack a confirmation gate. It is an authoring aid
-// answering "which targets should I write a sidecar entry for?" — not a runtime
-// gate, and not a claim that each hit is inherently dangerous. Only a human
-// reading the output can decide whether a specific target needs protection.
+// LooksDestructive reports whether a target name contains danger vocabulary.
+func LooksDestructive(name string) bool {
+	for _, d := range dangerous {
+		if strings.Contains(name, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// Gated reports whether a must be confirmed before running. An explicit sidecar
+// decision wins; a sidecar confirm message implies a gate; otherwise the name
+// heuristic decides.
+func (a Action) Gated() bool {
+	if a.Gate != nil {
+		return *a.Gate
+	}
+	return a.Confirm != "" || LooksDestructive(a.Name)
+}
+
+// GatedByHeuristic reports an action gated only because of its name, with no
+// sidecar decision behind it. Doctor reports exactly these.
+func (a Action) GatedByHeuristic() bool {
+	return a.Gate == nil && a.Confirm == "" && LooksDestructive(a.Name)
+}
+
+// Doctor reports actions gated only by the name heuristic, where the operator
+// has not yet written a sidecar entry to confirm or exempt them. It is an
+// authoring aid answering "which targets should I write a sidecar entry for?"
+// — not a runtime gate, and not a claim that each hit is inherently dangerous.
+// Only a human reading the output can decide whether a specific target needs
+// protection.
 func Doctor(repos []Repo) []string {
 	var warns []string
 	for _, r := range repos {
 		for _, a := range r.Actions {
-			if a.Confirm != "" {
+			if !a.GatedByHeuristic() {
 				continue
 			}
-			for _, d := range dangerous {
-				if strings.Contains(a.Name, d) {
-					warns = append(warns, fmt.Sprintf(
-						"%s: %q has no confirm in .volinit/actions.toml — review whether it needs one", r.Name, a.Name))
-					break
-				}
-			}
+			warns = append(warns, fmt.Sprintf(
+				"%s: %q is gated by name heuristic only — set confirm = \"...\" or gate = false in .volinit/actions.toml", r.Name, a.Name))
 		}
 	}
 	return warns

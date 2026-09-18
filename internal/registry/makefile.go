@@ -12,6 +12,7 @@ type Action struct {
 	Description string
 	Section     string
 
+	Gate        *bool  // nil = unset (heuristic decides), true = always gate, false = exempted
 	Confirm     string // non-empty => prompt with this text before running
 	Sudo        bool   // needs a real TTY for a password prompt
 	Detach      bool   // run via systemd-run --user, follow the journal
