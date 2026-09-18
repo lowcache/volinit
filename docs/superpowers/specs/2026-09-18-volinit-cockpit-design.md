@@ -291,16 +291,23 @@ the **output medium**, not the technology:
 | tier | needs | renders |
 |---|---|---|
 | T2 | kitty graphics | pixel frames of the same assembly — enhancement, later plan |
-| T1 | truecolor cells | **the flagship**: the 3D exploded assembly, via Limoni, in cells |
+| T1 | truecolor cells | **the flagship**: the exploded assembly, drawn isometric in braille cells |
 | T0 | anything | plain text, no escapes |
 
 * **T3 is removed.** Live vs replayed is a playback property, not a tier.
-  The greeting and morph replay from cache at every tier; nothing renders
-  live on the shell-start path.
+* **The T1 renderer is in-house, not Limoni** (operator decision). The
+  subject is drafting line art: orthographic isometric plates, hairline
+  edges, hatching, leaders. Limoni's widgets draw lit perspective solids;
+  its wireframe is single-colour with no depth test on lines, so lower
+  plates' edges would show through as the morph closes the gap, and it has
+  no hatching. A small isometric braille rasterizer draws the plates bottom
+  up, each erasing its own silhouette, which is exact hidden-line removal
+  for convex plates stacked on one axis. Limoni stays available for a
+  later rotating or lit view.
 * **T2 needs its own mesh→pixel rasterizer.** Limoni's kitty/sixel encoder
   takes raster images only. T2 is enhancement, not the route to spectacle.
-* **Glyph set is a T1 parameter** (braille / half-block / ascii), part of the
-  cache key. OPEN: the Linux VT console before the graphical session is
+* **Glyph set is a T1 parameter** (braille / half-block / ascii); braille
+  only for now. OPEN: the Linux VT console before the graphical session is
   unverified for braille glyphs and truecolor; do not claim TTY coverage
   until it is checked on the real console.
 
@@ -318,13 +325,14 @@ roles rather than the wiki's fixed ink:
 
 | wiki | palette role |
 |---|---|
-| ink | `on_surface` |
-| hairline keyline, leader | `outline` |
-| magenta — the one located item | `primary` |
-| cyan — construction only | `surface_variant` |
+| ink: part edges, lettering | `on_surface` |
+| hatching, dashed leaders | `outline` |
+| cyan — construction (axis, datum) | `outline`, drawn as a centre line |
+| magenta — the one located item | `primary`: the list caret |
 
-The located-item rule holds: `primary` marks exactly one thing and is never
-decoration. The wiki refuses the terminal-green hero; so does volinit.
+The palette carries no second accent, so construction is told apart from
+leaders by dash pattern, not hue. The located-item rule holds: `primary`
+marks exactly one thing — the selected row — and never appears in the art. The wiki refuses the terminal-green hero; so does volinit.
 
 ## The morph in these terms (APPROVED by the operator, 2026-09-18)
 
@@ -333,16 +341,21 @@ plates travel together along the axis — while the assembly scales into the
 sidebar strip, where it stays assembled. The same parts, arriving where they
 will live.
 
-## Cache, revised
+## Cache, revised — deferred on evidence
 
-```
-$XDG_CACHE_HOME/volinit/hero/<palette-hash>-<cols>x<rows>-<glyphs>-<tier>-<ver>/
-```
+The disk cache existed because 3D rendering was expected to be expensive.
+The in-house renderer draws a frame from arithmetic over a dot grid, and a
+file read may cost more than the render. The hero plan benchmarks a full
+greeting frame against a hard budget; if it holds, frames render live and
+the cache is not built. If it fails, the cache returns keyed on
+`<palette-hash>-<cols>x<rows>-<glyphs>-<ver>`.
 
-`px` is dropped: cell frames do not depend on pixel geometry. Frames are
-ANSI byte streams; replay is still a file read plus a write to stdout.
+Measured before the plan was written, from the plan's own code: a full
+240×70 greeting frame renders in 609µs against a 4ms budget. The cache is
+not built.
 
 ## Greeting keys
 
-`q`, `esc` and `ctrl+c` quit straight from State A. Every other key
-dismisses to State B and does nothing else.
+`q`, `esc` and `ctrl+c` quit straight from State A. Every other key starts
+the morph and does nothing else; a key during the morph lands in State B
+immediately and is likewise consumed.
