@@ -587,12 +587,6 @@ func TestParseHelpTargetReadsEchoedLines(t *testing.T) {
 	}
 }
 
-func TestParseHelpTargetStopsAtNextTarget() {}
-```
-
-Replace that last stub with:
-
-```go
 func TestParseHelpTargetStopsAtRecipeEnd(t *testing.T) {
 	src := "help:\n\t@echo \"make a   first\"\n\nother:\n\t@echo \"make b   second\"\n"
 	got := ParseHelpTarget(src)
