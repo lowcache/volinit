@@ -11,6 +11,16 @@ import (
 	"github.com/lowcache/volinit/internal/theme"
 )
 
+// configDir honours XDG_CONFIG_HOME, falling back to ~/.config. The noctalia
+// template writes the palette under $XDG_CONFIG_HOME; reading ~/.config
+// unconditionally agreed with it only by coincidence, and disagreed silently.
+func configDir(home string) string {
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		return d
+	}
+	return filepath.Join(home, ".config")
+}
+
 func main() {
 	// Everything below degrades rather than fails — volinit runs on every
 	// interactive shell and must not block one. But it says what it lost:
@@ -48,7 +58,7 @@ func main() {
 	}
 
 	// Loaded after the doctor branch, which never uses it.
-	palettePath := filepath.Join(home, ".config", "volinit", "palette.toml")
+	palettePath := filepath.Join(configDir(home), "volinit", "palette.toml")
 	p, err := theme.Load(palettePath)
 	if err != nil {
 		note("%s: %v; using the built-in palette", palettePath, err)
