@@ -27,40 +27,29 @@ fallback, sidecar, doctor), `internal/theme` (noctalia M3 palette),
 `internal/run` (foreground + detached commands), `internal/runtime` (Bubble
 Tea cockpit), `internal/hero` (tier detection).
 
-## Do these, in order
+## Do these, in order (updated 2026-09-18, second session)
 
-1. **Review hero tasks 1+2** — commits `d9a0d68`, `b0103d1`. Implemented and
-   green but NEVER REVIEWED. Package the diff from `f8e0a1c..b0103d1` and
-   dispatch a task reviewer before building on them.
+1. **Execute `docs/superpowers/plans/2026-09-18-volinit-hero-t1-art.md`**,
+   Tasks 3–7. Tasks 4–5 (canvas, assembly) were compiled and tested from
+   the plan text before commit: 22 hero tests green, 609µs per 240×70
+   frame. Tasks 3, 6, 7 (runtime) are unverified until implemented.
+2. After Task 7: `nix flake check`, then the operator reviews the greeting,
+   morph and strip at a real terminal. Known tuning item: the assembled
+   strip's plate seams read as a dense texture at R=10.
 
-2. **Limoni spike — DONE.** Read
-   `docs/superpowers/specs/2026-09-18-limoni-spike-findings.md`.
-   Headline: Limoni's 3D widgets rasterize into TEXT CELLS, not kitty frames.
-   So it is not a T3 technology — it is a T1 one, and the exploded-assembly
-   hero can therefore run over SSH, in tmux, on the TTY and inside
-   anon-shell. Measured at 216fps worst case, and it coexists with Bubble Tea
-   as a pure frame producer.
+Done this session — do not redo:
 
-3. **REVISE THE TIER MODEL, then write hero Tasks 3+.** The spec assumed 3D
-   required kitty graphics. It does not. T1 becomes the ambition rather than
-   the floor, and the image tiers become enhancement rather than the only
-   route to spectacle. Do this revision before writing the sidebar layout,
-   cell art, frame cache and morph tasks — it changes what the cache holds.
-
-4. **Confirm-gate inversion — OPERATOR APPROVED, designed, not built.**
-   Full design in `.superpowers/sdd/2026-09-18-volinit-foundation/progress.md`
-   under `OPERATOR DECISION`. It was queued only to avoid a parallel-
-   implementer conflict, not because anything is unresolved.
-
-## The safety issue, stated plainly
-
-The cockpit runs actions on Enter. `Action.Confirm` is set only by a
-`.volinit/actions.toml` sidecar, and **no sidecar exists anywhere in the
-fleet**. So all 101 actions currently run ungated — including
-`hotelevangelism newsletter-push` (real email to real subscribers), three
-live blog `deploy`s, `sops-rekey`, `backup-force` and `trash`.
-
-Item 4 fixes this. Until it ships, this is the most important open defect.
+* Hero Tasks 1+2 reviewed and approved (real base `6a7c820`; the
+  `f8e0a1c` cited earlier never existed). One finding, folded into Task 3:
+  `New` read the env/TTY itself, making tests invocation-dependent.
+* Confirm-gate inversion shipped (`4897167`). 29 fleet actions are gated by
+  the name heuristic, including newsletter-push, every deploy, sops-rekey,
+  backup-force, trash. **The safety defect below is closed.**
+* Spec addendum (`0e47a17`, `381e2d6`): T3 removed; the hero is the volnix
+  exploded assembly from wiki.infernalcode.com; **in-house isometric braille
+  renderer, not Limoni** (operator decision — Limoni draws lit perspective
+  solids, no hatching, no depth-tested lines); morph approved; q/esc/ctrl+c
+  quit from the greeting; disk cache dropped on measured evidence.
 
 ## Delegation policy — the expensive lesson
 
