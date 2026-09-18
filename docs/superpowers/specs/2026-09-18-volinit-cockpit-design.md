@@ -274,3 +274,75 @@ Constraints the morph must satisfy:
 * Full-bleed means the greeting shows no workflow information. That is the
   accepted cost of the operator's "identity first" framing: the tool
   informs you one keypress later.
+
+---
+
+# Addendum — tier revision and the hero subject (2026-09-18, operator-directed)
+
+Supersedes the Tiers table, the T3 row's Limoni fence rationale, and the
+"any keypress dismisses" wording. Grounded in
+`2026-09-18-limoni-spike-findings.md`.
+
+## Tiers, revised
+
+Limoni rasterizes 3D into text cells, not kitty frames. Tiers therefore name
+the **output medium**, not the technology:
+
+| tier | needs | renders |
+|---|---|---|
+| T2 | kitty graphics | pixel frames of the same assembly — enhancement, later plan |
+| T1 | truecolor cells | **the flagship**: the 3D exploded assembly, via Limoni, in cells |
+| T0 | anything | plain text, no escapes |
+
+* **T3 is removed.** Live vs replayed is a playback property, not a tier.
+  The greeting and morph replay from cache at every tier; nothing renders
+  live on the shell-start path.
+* **T2 needs its own mesh→pixel rasterizer.** Limoni's kitty/sixel encoder
+  takes raster images only. T2 is enhancement, not the route to spectacle.
+* **Glyph set is a T1 parameter** (braille / half-block / ascii), part of the
+  cache key. OPEN: the Linux VT console before the graphical session is
+  unverified for braille glyphs and truecolor; do not claim TTY coverage
+  until it is checked on the real console.
+
+## The subject: volnix, exploded
+
+The hero is the general-assembly drawing from `wiki.infernalcode.com`, in
+cells: ten plates on a vertical assembly axis, signed boot chain at the base
+to the niri + Noctalia shell at the top, with the phone as a detached
+sub-assembly. The tmpfs root is the datum: the six plates above it are
+volatile (hatched), the four below persist (solid). Plates are procedural
+geometry, not a modelled asset.
+
+The wiki's drawing language carries over, with colour taken from palette
+roles rather than the wiki's fixed ink:
+
+| wiki | palette role |
+|---|---|
+| ink | `on_surface` |
+| hairline keyline, leader | `outline` |
+| magenta — the one located item | `primary` |
+| cyan — construction only | `surface_variant` |
+
+The located-item rule holds: `primary` marks exactly one thing and is never
+decoration. The wiki refuses the terminal-green hero; so does volinit.
+
+## The morph in these terms (APPROVED by the operator, 2026-09-18)
+
+Full bleed is the assembly exploded. Dismissal closes the explosion — the
+plates travel together along the axis — while the assembly scales into the
+sidebar strip, where it stays assembled. The same parts, arriving where they
+will live.
+
+## Cache, revised
+
+```
+$XDG_CACHE_HOME/volinit/hero/<palette-hash>-<cols>x<rows>-<glyphs>-<tier>-<ver>/
+```
+
+`px` is dropped: cell frames do not depend on pixel geometry. Frames are
+ANSI byte streams; replay is still a file read plus a write to stdout.
+
+## Greeting keys
+
+`q`, `esc` and `ctrl+c` quit straight from State A. Every other key
+dismisses to State B and does nothing else.
