@@ -10,5 +10,5 @@ error              = "{{colors.error.default.hex}}"
 
 # Tonal ramp - neutral (18 standard steps, 0 = black .. 17 = white)
 <* for tone in palettes.neutral *>
-neutral_{{ loop.index0 }} = "{{ tone.default }}"
+neutral_{{ loop.index }} = "{{ tone.default }}"
 <* endfor *>
