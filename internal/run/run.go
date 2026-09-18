@@ -4,8 +4,8 @@
 //
 // Each constructor builds what its name promises: Command constructs a
 // foreground make invocation, and DetachedCommand constructs a systemd-run
-// unit for detached execution. Choosing between them belongs to the caller
-// that knows the action's intent; both constructors ignore a.Detach entirely.
+// unit for detached execution. Both ignore a.Detach entirely; For is the
+// dispatcher that reads it and picks between them.
 package run
 
 import (
@@ -32,6 +32,20 @@ func sanitizeRepoName(repoPath string) string {
 	base := filepath.Base(repoPath)
 	// Replace any character that's not alphanumeric, hyphen, or underscore with underscore.
 	return regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(base, "_")
+}
+
+// For picks the constructor the action asks for. Detach means the work must
+// outlive the cockpit, so it goes to systemd-run; everything else runs in the
+// foreground where tea.ExecProcess can hand it a real TTY.
+//
+// param reaches only the foreground path: carrying one into a transient unit
+// needs systemd-run --setenv, and no fleet action is both detached and
+// parameterised today. Revisit this, not the call sites, when one is.
+func For(a registry.Action, repoPath, param string) *exec.Cmd {
+	if a.Detach {
+		return DetachedCommand(a, repoPath)
+	}
+	return Command(a, repoPath, param)
 }
 
 // Command builds a foreground `make <target>` for the repo. The caller runs

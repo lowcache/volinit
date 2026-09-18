@@ -113,3 +113,27 @@ func TestBothConstructorsIgnoreDetach(t *testing.T) {
 		t.Errorf("DetachedCommand args %q should include make target", dArgs)
 	}
 }
+
+func TestForDispatchesOnDetach(t *testing.T) {
+	fg := For(registry.Action{Name: "build"}, "/tmp/repo", "")
+	if got := strings.Join(fg.Args, " "); strings.Contains(got, "systemd-run") {
+		t.Errorf("plain action went detached: %q", got)
+	}
+	bg := For(registry.Action{Name: "switch", Detach: true}, "/tmp/repo", "")
+	if got := strings.Join(bg.Args, " "); !strings.Contains(got, "systemd-run") {
+		t.Errorf("detached action ran in the foreground: %q", got)
+	}
+}
+
+func TestForPassesParamToForegroundPath(t *testing.T) {
+	c := For(registry.Action{Name: "anon-run", ParamName: "CMD"}, "/tmp/repo", "id")
+	var found bool
+	for _, e := range c.Env {
+		if e == "CMD=id" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("CMD not in env: %v", c.Env)
+	}
+}
