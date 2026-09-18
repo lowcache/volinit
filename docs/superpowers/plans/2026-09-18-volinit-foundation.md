@@ -694,3 +694,21 @@ Continues in a follow-up plan, in this order:
 
 **Then: CHECKPOINT — operator sign-off on graphics and animation direction
 before any hero work begins.**
+
+---
+
+## Amendment (2026-09-18, after API verification)
+
+Bubble Tea v2 restores the terminal on panic and SIGINT **by default**
+(opt out via `tea.WithoutCatchPanics()` / `tea.WithoutSignalHandler()`).
+
+Task 2's `term.Guard` is therefore **not** for the Bubble Tea program. It
+covers the paths that run without one:
+
+* `greet_mode = "frame"` — hero replay writes escape sequences directly and
+  exits, never starting a program
+* the fast banner path on shell init
+* raw sequence work during terminal capability probing
+
+Keep Task 2 as written; its justification is narrower than the spec implied.
+Do not add signal handling around the Bubble Tea program itself.
