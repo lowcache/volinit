@@ -1,0 +1,10 @@
+# volinit reads this palette directly, so unlike starship-m3 there is no
+# post_hook: the generated file IS the consumed file.
+
+[catalog.volinit-m3]
+name = "volinit (M3 roles)"
+category = "terminal"
+
+[templates.volinit-m3]
+input_path = "volinit-m3.toml"
+output_path = "$XDG_CONFIG_HOME/volinit/palette.toml"
