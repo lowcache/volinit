@@ -33,18 +33,19 @@ Tea cockpit), `internal/hero` (tier detection).
    green but NEVER REVIEWED. Package the diff from `f8e0a1c..b0103d1` and
    dispatch a task reviewer before building on them.
 
-2. **Limoni spike** — findings should be at
-   `~/Storage/tmp/claude/limoni-spike/FINDINGS.md`. If absent, the spike died
-   with the session; re-run it. It answers GO/NO-GO on render tier T3.
-   The criterion that decides it is COEXISTENCE: can Limoni act as a pure
-   frame producer into a buffer we own, or does it insist on driving the
-   terminal Bubble Tea already owns? If it insists, T3 is dead — and T2
-   (prerendered frames) loses nothing, because a greeting is a FIXED
-   animation and prerendered frames of a 3D scene look identical to live 3D
-   when nothing is interacting with it.
+2. **Limoni spike — DONE.** Read
+   `docs/superpowers/specs/2026-09-18-limoni-spike-findings.md`.
+   Headline: Limoni's 3D widgets rasterize into TEXT CELLS, not kitty frames.
+   So it is not a T3 technology — it is a T1 one, and the exploded-assembly
+   hero can therefore run over SSH, in tmux, on the TTY and inside
+   anon-shell. Measured at 216fps worst case, and it coexists with Bubble Tea
+   as a pure frame producer.
 
-3. **Write hero Tasks 3+** — sidebar layout, cell art, frame cache, the
-   morph. Deliberately unwritten: the spike changes the cache's shape.
+3. **REVISE THE TIER MODEL, then write hero Tasks 3+.** The spec assumed 3D
+   required kitty graphics. It does not. T1 becomes the ambition rather than
+   the floor, and the image tiers become enhancement rather than the only
+   route to spectacle. Do this revision before writing the sidebar layout,
+   cell art, frame cache and morph tasks — it changes what the cache holds.
 
 4. **Confirm-gate inversion — OPERATOR APPROVED, designed, not built.**
    Full design in `.superpowers/sdd/2026-09-18-volinit-foundation/progress.md`
