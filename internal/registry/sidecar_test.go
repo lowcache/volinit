@@ -41,6 +41,9 @@ param = { name = "CMD", prompt = "Command to jail" }
 	if r.Actions[2].ParamName != "CMD" {
 		t.Errorf("ParamName = %q, want CMD", r.Actions[2].ParamName)
 	}
+	if r.Actions[2].ParamPrompt != "Command to jail" {
+		t.Errorf("ParamPrompt = %q, want 'Command to jail'", r.Actions[2].ParamPrompt)
+	}
 	if r.Actions[3].Detach || r.Actions[3].Confirm != "" {
 		t.Error("build has no entry and must stay plain")
 	}
