@@ -13,10 +13,11 @@
       # Module name, used only to name the built binary.
       pname = "volinit";
 
-      # Hash over the module dependencies. `null` is correct and complete for a
-      # module with no external deps. For one that has deps: set this to
-      # nixpkgs.lib.fakeHash, run `nix build .#default`, and paste back the hash
-      # the failure reports.
+      # Hash over the module dependencies. `null` is correct here *because* the
+      # dependencies are vendored in-tree: buildGoModule sees `vendor/` and
+      # builds straight from it, fetching nothing. Do not set a hash; setting
+      # one abandons the vendor path and reintroduces a network fetch. Deps
+      # change via `go mod vendor` + committing `vendor/`, not via this value.
       vendorHash = null;
 
       # Extra tools beyond the go toolchain, as nixpkgs attribute names.
@@ -62,6 +63,9 @@
               chmod -R u+w src
               cd src
               export GOFLAGS=-mod=vendor
+              # The check sandbox has no C compiler; cgo defaults on and would
+              # fail to build runtime/cgo. Nothing here needs it.
+              export CGO_ENABLED=0
               export GOCACHE=$TMPDIR/go-build
               export GOPATH=$TMPDIR/go
               ${command}
