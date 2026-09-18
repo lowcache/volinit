@@ -5,11 +5,20 @@ import (
 	"strings"
 )
 
-// Action is one runnable entry discovered in a repository.
+// Action is one runnable entry. The fields below Section come from the
+// optional sidecar; zero values mean "run it plainly".
 type Action struct {
 	Name        string
 	Description string
 	Section     string
+
+	Confirm     string // non-empty => prompt with this text before running
+	Sudo        bool   // needs a real TTY for a password prompt
+	Detach      bool   // run via systemd-run --user, follow the journal
+	Stream      bool   // long-lived output, render in a pager view
+	ParamName   string // env var name to pass, e.g. CMD
+	ParamPrompt string // prompt shown when collecting the param
+	When        string // visibility expression, e.g. host == nix-on-droid
 }
 
 // targetLine matches both `## :name: ....: description` and `## name: ---: description` —
