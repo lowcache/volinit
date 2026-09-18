@@ -30,8 +30,103 @@ func typed(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Text: strin
 
 var enter = tea.KeyPressMsg{Code: tea.KeyEnter}
 
-func TestDownMovesTheCursor(t *testing.T) {
+// keyPress builds a tea.KeyPressMsg by name, reusing the same construction
+// as typed/enter above rather than inventing a second form: named keys map
+// to their Code, everything else is a single printable rune.
+func keyPress(s string) tea.KeyPressMsg {
+	switch s {
+	case "enter":
+		return enter
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
+	case "ctrl+c":
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	default:
+		return typed([]rune(s)[0])
+	}
+}
+
+// dismiss advances a fresh model past the greeting so a test can exercise
+// the working state without also exercising the dismiss itself.
+func dismiss(m Model) Model {
+	next, _ := m.Update(typed(' '))
+	return next.(Model)
+}
+
+func TestStartsFullBleed(t *testing.T) {
 	m := fixture()
+	if m.stage != stageFullBleed {
+		t.Fatal("a fresh cockpit must open at full bleed")
+	}
+}
+
+func TestAnyKeyDismissesToSidebar(t *testing.T) {
+	m := fixture()
+	next, _ := m.Update(keyPress("x"))
+	if next.(Model).stage != stageSidebar {
+		t.Fatal("any key must dismiss the greeting")
+	}
+}
+
+// TestTheDoorIsOneWay pins the one-way door: once dismissed, the greeting
+// must never reappear within an invocation. The key set here is every key
+// model.key and key() switch on (q/esc/ctrl+c, j/down, k/up, enter,
+// backspace, y/Y in modeConfirm, plus a plain printable and space) — a
+// superset of the brief's list — plus a resize.
+func TestTheDoorIsOneWay(t *testing.T) {
+	m := fixture()
+	next, _ := m.Update(keyPress("x"))
+	for _, k := range []string{
+		"x", "enter", "j", "k", "esc", "y", "n", " ",
+		"down", "up", "ctrl+c", "backspace", "Y", "q",
+	} {
+		next, _ = next.(Model).Update(keyPress(k))
+		if next.(Model).stage != stageSidebar {
+			t.Fatalf("key %q reopened the greeting", k)
+		}
+	}
+	next, _ = next.(Model).Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if next.(Model).stage != stageSidebar {
+		t.Fatal("a resize reopened the greeting")
+	}
+}
+
+func TestFullBleedShowsNoActions(t *testing.T) {
+	v := fixture().View()
+	if strings.Contains(v.Content, "switch") {
+		t.Fatal("the greeting must show art only, no action list")
+	}
+}
+
+// TestDismissDoesNotAlsoAct pins that dismissing consumes the key: pressing
+// enter at the greeting must not run the action under the cursor, since
+// several fleet targets send irreversible mail or deploy live sites.
+func TestDismissDoesNotAlsoAct(t *testing.T) {
+	m := New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
+		{Name: "deploy", Confirm: "Deploy live. Continue?"},
+	}}}, theme.Default(), nil)
+
+	next, cmd := m.Update(enter)
+	if cmd != nil {
+		t.Fatal("dismissing the greeting ran a command")
+	}
+	got := next.(Model)
+	if got.stage != stageSidebar {
+		t.Fatal("enter did not dismiss the greeting")
+	}
+	if got.mode != modeList {
+		t.Fatal("dismissing also opened the confirm gate; the first key must only dismiss")
+	}
+}
+
+func TestDownMovesTheCursor(t *testing.T) {
+	m := dismiss(fixture())
 	next, _ := m.Update(typed('j'))
 	if next.(Model).cursor != 1 {
 		t.Errorf("cursor = %d, want 1", next.(Model).cursor)
@@ -39,7 +134,7 @@ func TestDownMovesTheCursor(t *testing.T) {
 }
 
 func TestCursorStopsAtTheEnd(t *testing.T) {
-	m := fixture()
+	m := dismiss(fixture())
 	m.cursor = 1
 	next, _ := m.Update(typed('j'))
 	if next.(Model).cursor != 1 {
@@ -48,7 +143,7 @@ func TestCursorStopsAtTheEnd(t *testing.T) {
 }
 
 func TestUpMovesTheCursorAndStopsAtTheTop(t *testing.T) {
-	m := fixture()
+	m := dismiss(fixture())
 	m.cursor = 1
 	m = press(t, m, typed('k'))
 	if m.cursor != 0 {
@@ -60,7 +155,7 @@ func TestUpMovesTheCursorAndStopsAtTheTop(t *testing.T) {
 }
 
 func TestQuitAsksTheProgramToStop(t *testing.T) {
-	_, cmd := fixture().Update(typed('q'))
+	_, cmd := dismiss(fixture()).Update(typed('q'))
 	if cmd == nil {
 		t.Fatal("q returned no command; nothing would quit")
 	}
@@ -70,7 +165,7 @@ func TestQuitAsksTheProgramToStop(t *testing.T) {
 }
 
 func TestViewListsEveryAction(t *testing.T) {
-	v := fixture().View()
+	v := dismiss(fixture()).View()
 	for _, want := range []string{"switch", "build"} {
 		if !strings.Contains(v.Content, want) {
 			t.Errorf("view missing %q:\n%s", want, v.Content)
@@ -80,7 +175,7 @@ func TestViewListsEveryAction(t *testing.T) {
 
 // An empty fleet must not render as a blank alt screen with no way out.
 func TestZeroRowsSaysSoAndSaysHowToLeave(t *testing.T) {
-	m := New(nil, theme.Default(), []string{"volinit: nothing found under /nowhere"})
+	m := dismiss(New(nil, theme.Default(), []string{"volinit: nothing found under /nowhere"}))
 	v := m.View()
 	for _, want := range []string{"no runnable targets found", "q quits", "nothing found under /nowhere"} {
 		if !strings.Contains(v.Content, want) {
@@ -93,9 +188,9 @@ func TestZeroRowsSaysSoAndSaysHowToLeave(t *testing.T) {
 }
 
 func TestEnterConfirmsBeforeRunning(t *testing.T) {
-	m := New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
+	m := dismiss(New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
 		{Name: "deploy", Confirm: "Deploy live. Continue?"},
-	}}}, theme.Default(), nil)
+	}}}, theme.Default(), nil))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -123,9 +218,9 @@ func TestEnterConfirmsBeforeRunning(t *testing.T) {
 }
 
 func TestEnterCollectsParamBeforeRunning(t *testing.T) {
-	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "anon-run", ParamName: "CMD", ParamPrompt: "Command to jail"},
-	}}}, theme.Default(), nil)
+	}}}, theme.Default(), nil))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -152,9 +247,9 @@ func TestEnterCollectsParamBeforeRunning(t *testing.T) {
 }
 
 func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
-	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "switch", Detach: true},
-	}}}, theme.Default(), nil)
+	}}}, theme.Default(), nil))
 
 	next, cmd := m.Update(enter)
 	if cmd == nil {
@@ -165,12 +260,15 @@ func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 	}
 }
 
+// wide returns a model already past the greeting: these tests are about
+// scrolling the working list, not the dismiss.
 func wide(n int) Model {
 	var actions []registry.Action
 	for i := 0; i < n; i++ {
 		actions = append(actions, registry.Action{Name: fmt.Sprintf("a%02d", i)})
 	}
-	return New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: actions}}, theme.Default(), nil)
+	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: actions}}, theme.Default(), nil)
+	return dismiss(m)
 }
 
 func TestViewRendersOnlyWhatFits(t *testing.T) {

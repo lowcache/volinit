@@ -4,10 +4,13 @@ package runtime
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/term"
+	"github.com/lowcache/volinit/internal/hero"
 	"github.com/lowcache/volinit/internal/registry"
 	"github.com/lowcache/volinit/internal/run"
 	"github.com/lowcache/volinit/internal/theme"
@@ -29,6 +32,15 @@ const (
 	modeConfirm
 )
 
+// stage is the greeting/working axis: separate from mode, which tracks
+// list/confirm/param once the cockpit is already in the working state.
+type stage int
+
+const (
+	stageFullBleed stage = iota // the greeting: art edge to edge
+	stageSidebar                // the working state: art compressed, list live
+)
+
 // defaultHeight stands in until the first WindowSizeMsg arrives, which is
 // immediately in a real terminal and never in a test.
 const defaultHeight = 24
@@ -43,6 +55,8 @@ type Model struct {
 	palette theme.Palette
 	notices []string // degraded-state lines; shown, never fatal
 	mode    mode
+	stage   stage
+	tier    hero.Tier
 	param   string
 	status  string
 	quit    bool
@@ -55,7 +69,8 @@ func New(repos []registry.Repo, p theme.Palette, notices []string) Model {
 			rows = append(rows, row{repo: r.Name, path: r.Path, action: a})
 		}
 	}
-	return Model{rows: rows, palette: p, notices: notices, height: defaultHeight}
+	tier := hero.Detect(os.Getenv, term.IsTerminal(os.Stdout.Fd()))
+	return Model{rows: rows, palette: p, notices: notices, height: defaultHeight, stage: stageFullBleed, tier: tier}
 }
 
 // Init satisfies tea.Model. v2's Model.Init returns only a Cmd (unlike the
@@ -81,6 +96,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The greeting dismisses on the first key of any kind and consumes it:
+	// it must never also act, since several fleet targets send irreversible
+	// mail or deploy live sites. This is the only place stageSidebar is
+	// assigned; stageFullBleed is never assigned outside New.
+	if m.stage == stageFullBleed {
+		m.stage = stageSidebar
+		return m, nil
+	}
 	switch m.mode {
 	case modeParam:
 		switch k.String() {
@@ -210,6 +233,23 @@ func (m *Model) clamp() {
 }
 
 func (m Model) View() tea.View {
+	if m.stage == stageFullBleed {
+		return m.viewFullBleed()
+	}
+	return m.viewSidebar()
+}
+
+// viewFullBleed is the greeting. Art is a placeholder here — the cell-art
+// pipeline and the morph land in a later task — but it must never show the
+// action list, since nothing has been dismissed yet.
+func (m Model) viewFullBleed() tea.View {
+	fg := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.OnSurface))
+	v := tea.NewView(fg.Render("volinit") + "\n\npress any key")
+	v.AltScreen = true
+	return v
+}
+
+func (m Model) viewSidebar() tea.View {
 	fg := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.OnSurface))
 	sel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.Primary))
 
