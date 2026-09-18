@@ -218,3 +218,59 @@ API stable enough to pin. Any miss → T2, which costs the greeting nothing.
 5. **CHECKPOINT — operator sign-off on graphics and animation direction**
 6. `hero` — T1 first, then spike, then T2/T3
 7. Wire into the shell, benchmark the budget
+
+---
+
+# Addendum — hero interaction model (2026-09-18, operator-directed)
+
+Supersedes the Hero section's implicit assumption that the greeting and the
+cockpit share one layout.
+
+## The two states and the one-way door
+
+**State A — full bleed.** The greeting is art edge to edge. No list, no
+chrome. This is the identity moment the whole project exists for, and it is
+what every new terminal opens with.
+
+**State B — sidebar + list.** The art compresses into a narrow left strip;
+actions fill the remaining width at full height. This is the working state:
+all 101 actions reachable, art still present but subordinate.
+
+**The door is one-way.** A dismissal takes A to B and there is no route
+back within that invocation. Not a toggle, not a mode — a progression. The
+operator asked for this explicitly, and it is what stops the art becoming a
+thing to flip in and out of.
+
+**Dismissal is per-invocation.** The next terminal opens at State A again.
+The greeting greets every time; the dismissal only settles the current run.
+
+## The morph is the signature
+
+The art does not cut, fade, or vanish on dismissal. It **compresses into
+the sidebar** — the same artwork, reflowed, arriving where it will live for
+the rest of the session. This transition is the single piece of animation
+seen on every terminal, so it carries more of the project's identity than
+the opening sequence does, and it gets the craft budget accordingly.
+
+Constraints the morph must satisfy:
+
+* **Interruptible.** A second keypress during the morph lands in State B
+  immediately. Never make the operator wait for their own transition.
+* **Degrades by tier.** T3/T2 morph the rendered art; T1 morphs the cell
+  composition; T0 prints State B directly with no transition at all.
+* **Frame-budgeted.** The morph replays from the same cache as the hero
+  (keyed on palette hash, geometry, tier) — it is never rendered live on a
+  shell-start path.
+
+## What this changes from the original Hero section
+
+* The "settled frame" is now State B, not a variant of the hero. Its
+  quality bar is unchanged and still governing: it must be beautiful at T1,
+  because SSH, tmux, the TTY and anon-shell will only ever see T1.
+* The adaptive-depth rule (full sequence once per boot, settled frame
+  after) applies to the OPENING sequence only. The morph is not adaptive —
+  it happens on every dismissal, because it is the transition itself that
+  carries the identity.
+* Full-bleed means the greeting shows no workflow information. That is the
+  accepted cost of the operator's "identity first" framing: the tool
+  informs you one keypress later.
