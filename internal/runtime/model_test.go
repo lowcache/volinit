@@ -56,10 +56,11 @@ func keyPress(s string) tea.KeyPressMsg {
 	}
 }
 
-// dismiss advances a fresh model past the greeting so a test can exercise
-// the working state without also exercising the dismiss itself.
+// dismiss advances a fresh model past the greeting and the morph so a test
+// can exercise the working state without exercising either.
 func dismiss(m Model) Model {
 	next, _ := m.Update(typed(' '))
+	next, _ = next.(Model).Update(typed(' '))
 	return next.(Model)
 }
 
@@ -70,34 +71,60 @@ func TestStartsFullBleed(t *testing.T) {
 	}
 }
 
-func TestAnyKeyDismissesToSidebar(t *testing.T) {
-	m := fixture()
-	next, _ := m.Update(keyPress("x"))
-	if next.(Model).stage != stageSidebar {
-		t.Fatal("any key must dismiss the greeting")
+func TestAnyKeyStartsTheMorph(t *testing.T) {
+	next, cmd := fixture().Update(keyPress("x"))
+	if next.(Model).stage != stageMorph {
+		t.Fatal("any key must start the morph")
+	}
+	if cmd == nil {
+		t.Fatal("the morph was started with no tick to drive it")
 	}
 }
 
-// TestTheDoorIsOneWay pins the one-way door: once dismissed, the greeting
-// must never reappear within an invocation. The key set here is every key
-// model.key and key() switch on (q/esc/ctrl+c, j/down, k/up, enter,
-// backspace, y/Y in modeConfirm, plus a plain printable and space) — a
-// superset of the brief's list — plus a resize.
+// TestTheDoorIsOneWay pins the one-way door: once dismissed, nothing the
+// model handles — keys, morph ticks, a resize — may reopen the greeting.
 func TestTheDoorIsOneWay(t *testing.T) {
-	m := fixture()
-	next, _ := m.Update(keyPress("x"))
+	var next tea.Model = fixture()
+	next, _ = next.Update(keyPress("x"))
+	msgs := []tea.Msg{morphMsg{}, morphMsg{}}
 	for _, k := range []string{
 		"x", "enter", "j", "k", "esc", "y", "n", " ",
 		"down", "up", "ctrl+c", "backspace", "Y", "q",
 	} {
-		next, _ = next.(Model).Update(keyPress(k))
-		if next.(Model).stage != stageSidebar {
-			t.Fatalf("key %q reopened the greeting", k)
+		msgs = append(msgs, keyPress(k), morphMsg{})
+	}
+	msgs = append(msgs, tea.WindowSizeMsg{Width: 120, Height: 40})
+	for _, msg := range msgs {
+		next, _ = next.(Model).Update(msg)
+		if next.(Model).stage == stageFullBleed {
+			t.Fatalf("%#v reopened the greeting", msg)
 		}
 	}
-	next, _ = next.(Model).Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	if next.(Model).stage != stageSidebar {
-		t.Fatal("a resize reopened the greeting")
+}
+
+// Neither the dismissing key nor a key that interrupts the morph may act:
+// several fleet targets send irreversible mail or deploy live sites.
+func TestDismissDoesNotAlsoAct(t *testing.T) {
+	m := New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
+		{Name: "deploy", Confirm: "Deploy live. Continue?"},
+	}}}, theme.Default(), nil, hero.T1)
+
+	next, cmd := m.Update(enter)
+	if got := next.(Model); got.stage != stageMorph || got.mode != modeList {
+		t.Fatal("enter at the greeting must start the morph and nothing else")
+	}
+	// Safe to invoke: it is the morph tick, which starts no process.
+	if _, ok := cmd().(morphMsg); !ok {
+		t.Fatal("dismissing returned something other than the morph tick")
+	}
+
+	next, cmd = next.(Model).Update(enter)
+	got := next.(Model)
+	if got.stage != stageSidebar {
+		t.Fatal("a key during the morph must land in the sidebar")
+	}
+	if cmd != nil || got.mode != modeList {
+		t.Fatal("the key that interrupted the morph also acted")
 	}
 }
 
@@ -108,24 +135,42 @@ func TestFullBleedShowsNoActions(t *testing.T) {
 	}
 }
 
-// TestDismissDoesNotAlsoAct pins that dismissing consumes the key: pressing
-// enter at the greeting must not run the action under the cursor, since
-// several fleet targets send irreversible mail or deploy live sites.
-func TestDismissDoesNotAlsoAct(t *testing.T) {
-	m := New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
-		{Name: "deploy", Confirm: "Deploy live. Continue?"},
-	}}}, theme.Default(), nil, hero.T1)
-
-	next, cmd := m.Update(enter)
+func TestMorphRunsToTheSidebar(t *testing.T) {
+	next, cmd := fixture().Update(keyPress("x"))
+	for i := 0; i < morphFrames; i++ {
+		if cmd == nil {
+			t.Fatalf("the morph stopped ticking after %d frames", i)
+		}
+		next, cmd = next.(Model).Update(morphMsg{})
+	}
+	if next.(Model).stage != stageSidebar {
+		t.Fatal("the morph never settled")
+	}
 	if cmd != nil {
-		t.Fatal("dismissing the greeting ran a command")
+		t.Error("a settled morph kept ticking")
 	}
-	got := next.(Model)
-	if got.stage != stageSidebar {
-		t.Fatal("enter did not dismiss the greeting")
+}
+
+func TestStaleTickIsIgnored(t *testing.T) {
+	next, cmd := dismiss(fixture()).Update(morphMsg{})
+	if cmd != nil || next.(Model).stage != stageSidebar {
+		t.Fatal("a tick after the morph landed must do nothing")
 	}
-	if got.mode != modeList {
-		t.Fatal("dismissing also opened the confirm gate; the first key must only dismiss")
+}
+
+func TestMorphFrameFillsTheTerminal(t *testing.T) {
+	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m, _ = mustUpdate(t, m, keyPress("x"))
+	m, _ = mustUpdate(t, m, morphMsg{})
+	v := m.View().Content
+	if n := strings.Count(v, "\n") + 1; n != 30 {
+		t.Errorf("morph frame is %d lines, want 30", n)
+	}
+	if !hasBraille(v) {
+		t.Error("the morph frame drew nothing")
+	}
+	if strings.Contains(v, "UEFI") {
+		t.Error("lettering leaves with the dismissal")
 	}
 }
 

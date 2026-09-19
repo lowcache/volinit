@@ -4,8 +4,10 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -37,9 +39,22 @@ const (
 type stage int
 
 const (
-	stageFullBleed stage = iota // the greeting: art edge to edge
-	stageSidebar                // the working state: art compressed, list live
+	stageFullBleed stage = iota // the greeting: the assembly exploded, edge to edge
+	stageMorph                  // the one-way transition; any key lands it
+	stageSidebar                // the working state: assembly in a strip, list live
 )
+
+const (
+	morphFrames   = 18
+	morphInterval = 16 * time.Millisecond
+)
+
+// morphMsg advances the morph one frame.
+type morphMsg struct{}
+
+func morphTick() tea.Cmd {
+	return tea.Tick(morphInterval, func(time.Time) tea.Msg { return morphMsg{} })
+}
 
 // defaultHeight stands in until the first WindowSizeMsg arrives, which is
 // immediately in a real terminal and never in a test.
@@ -63,6 +78,7 @@ type Model struct {
 	notices []string // degraded-state lines; shown, never fatal
 	mode    mode
 	stage   stage
+	frame   int // morph progress, 0..morphFrames
 	tier    hero.Tier
 	param   string
 	status  string
@@ -99,6 +115,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.status = msg.Action + " finished"
 		}
+	case morphMsg:
+		// A tick can arrive after a key already landed the morph; drop it.
+		if m.stage != stageMorph {
+			return m, nil
+		}
+		m.frame++
+		if m.frame >= morphFrames {
+			m.stage = stageSidebar
+			return m, nil
+		}
+		return m, morphTick()
 	case tea.KeyPressMsg:
 		return m.key(msg)
 	}
@@ -106,14 +133,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.stage == stageFullBleed {
-		// Quit keys leave straight from the greeting. Any other key dismisses
-		// and is consumed: several fleet targets send mail or deploy live sites.
+	switch m.stage {
+	case stageFullBleed:
+		// Quit keys leave straight from the greeting. Any other key starts the
+		// morph and is consumed: several fleet targets send mail or deploy.
 		switch k.String() {
 		case "q", "esc", "ctrl+c":
 			m.quit = true
 			return m, tea.Quit
 		}
+		m.stage = stageMorph
+		return m, morphTick()
+	case stageMorph:
+		// Interruptible: land now, and consume this key too.
 		m.stage = stageSidebar
 		return m, nil
 	}
@@ -247,15 +279,35 @@ func (m *Model) clamp() {
 
 func (m Model) View() tea.View {
 	var content string
-	if m.stage == stageFullBleed {
+	switch m.stage {
+	case stageFullBleed:
 		pose, labels := hero.GreetingPose(m.width, m.height)
 		content = hero.Frame(m.width, m.height, pose, labels, m.palette)
-	} else {
+	case stageMorph:
+		content = m.viewMorph()
+	default:
 		content = m.viewSidebar()
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+// viewMorph closes the explosion while the assembly travels into the strip:
+// the same parts, arriving where they will live.
+func (m Model) viewMorph() string {
+	from, _ := hero.GreetingPose(m.width, m.height)
+	to := hero.StripPose(m.stripCols(), m.height)
+	t := ease(float64(m.frame) / morphFrames)
+	return hero.Frame(m.width, m.height, hero.Lerp(from, to, t), false, m.palette)
+}
+
+// ease is cubic in-out: the parts start gently and settle gently.
+func ease(t float64) float64 {
+	if t < 0.5 {
+		return 4 * t * t * t
+	}
+	return 1 - math.Pow(-2*t+2, 3)/2
 }
 
 // stripCols is the sidebar strip's width, or 0 when there is no art: at T0,
