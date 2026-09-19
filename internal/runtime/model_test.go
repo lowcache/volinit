@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/lowcache/volinit/internal/hero"
 	"github.com/lowcache/volinit/internal/registry"
 	"github.com/lowcache/volinit/internal/theme"
@@ -401,4 +402,57 @@ func mustUpdate(t *testing.T, m Model, msg tea.Msg) (Model, tea.Cmd) {
 	t.Helper()
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd
+}
+
+func hasBraille(s string) bool {
+	for _, r := range s {
+		if r > 0x2800 && r <= 0x28FF {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGreetingDrawsTheAssembly(t *testing.T) {
+	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 200, Height: 50})
+	v := m.View().Content
+	if !hasBraille(v) {
+		t.Fatal("the greeting drew no art")
+	}
+	if !strings.Contains(v, "UEFI + Lanzaboote") {
+		t.Error("a wide greeting letters the parts list")
+	}
+}
+
+func TestSidebarPutsTheAssemblyBesideTheList(t *testing.T) {
+	m, _ := mustUpdate(t, dismiss(fixture()), tea.WindowSizeMsg{Width: 120, Height: 30})
+	v := m.View().Content
+	if !hasBraille(v) {
+		t.Fatal("the sidebar lost the assembly")
+	}
+	for _, line := range strings.Split(v, "\n") {
+		if i := strings.Index(line, "switch"); i >= 0 {
+			if w := lipgloss.Width(line[:i]); w < sidebarCols+2 {
+				t.Errorf("list starts at column %d, inside the %d-column strip", w, sidebarCols)
+			}
+			return
+		}
+	}
+	t.Fatal("list row for switch not found")
+}
+
+func TestNarrowSidebarDropsTheStrip(t *testing.T) {
+	m, _ := mustUpdate(t, dismiss(fixture()), tea.WindowSizeMsg{Width: minStripWidth - 1, Height: 30})
+	if hasBraille(m.View().Content) {
+		t.Error("a narrow terminal gives every column to the list")
+	}
+}
+
+func TestT0SidebarHasNoArt(t *testing.T) {
+	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "build"},
+	}}}, theme.Default(), nil, hero.T0)
+	if hasBraille(m.View().Content) {
+		t.Error("T0 prints plain text: no art")
+	}
 }

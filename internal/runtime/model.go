@@ -45,12 +45,19 @@ const (
 // immediately in a real terminal and never in a test.
 const defaultHeight = 24
 
+const (
+	defaultWidth  = 80 // stands in until the first WindowSizeMsg, like defaultHeight
+	sidebarCols   = 24 // the assembled strip beside the list
+	minStripWidth = 72 // below this the list gets every column
+)
+
 // Model is the cockpit state. Flat list for now; the tree lands with the
 // visual design.
 type Model struct {
 	rows    []row
 	cursor  int
 	offset  int // index of the first visible row
+	width   int // terminal columns, from tea.WindowSizeMsg
 	height  int // terminal rows, from tea.WindowSizeMsg
 	palette theme.Palette
 	notices []string // degraded-state lines; shown, never fatal
@@ -69,7 +76,7 @@ func New(repos []registry.Repo, p theme.Palette, notices []string, tier hero.Tie
 			rows = append(rows, row{repo: r.Name, path: r.Path, action: a})
 		}
 	}
-	m := Model{rows: rows, palette: p, notices: notices, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	m := Model{rows: rows, palette: p, notices: notices, width: defaultWidth, height: defaultHeight, stage: stageFullBleed, tier: tier}
 	if tier == hero.T0 {
 		m.stage = stageSidebar // T0 prints State B directly, with no transition
 	}
@@ -84,7 +91,7 @@ func (m Model) Init() tea.Cmd { return nil }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.height = msg.Height
+		m.width, m.height = msg.Width, msg.Height
 		m.clamp()
 	case run.DoneMsg:
 		if msg.Err != nil {
@@ -239,23 +246,28 @@ func (m *Model) clamp() {
 }
 
 func (m Model) View() tea.View {
+	var content string
 	if m.stage == stageFullBleed {
-		return m.viewFullBleed()
+		pose, labels := hero.GreetingPose(m.width, m.height)
+		content = hero.Frame(m.width, m.height, pose, labels, m.palette)
+	} else {
+		content = m.viewSidebar()
 	}
-	return m.viewSidebar()
-}
-
-// viewFullBleed is the greeting. Art is a placeholder here — the cell-art
-// pipeline and the morph land in a later task — but it must never show the
-// action list, since nothing has been dismissed yet.
-func (m Model) viewFullBleed() tea.View {
-	fg := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.OnSurface))
-	v := tea.NewView(fg.Render("volinit") + "\n\npress any key")
+	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }
 
-func (m Model) viewSidebar() tea.View {
+// stripCols is the sidebar strip's width, or 0 when there is no art: at T0,
+// or when the terminal is too narrow to spare the columns.
+func (m Model) stripCols() int {
+	if m.tier == hero.T0 || m.width < minStripWidth {
+		return 0
+	}
+	return sidebarCols
+}
+
+func (m Model) viewSidebar() string {
 	fg := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.OnSurface))
 	sel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.palette.Primary))
 
@@ -288,9 +300,12 @@ func (m Model) viewSidebar() tea.View {
 	}
 	b.WriteString(fg.Render(m.footer()))
 
-	v := tea.NewView(b.String())
-	v.AltScreen = true
-	return v
+	list := b.String()
+	if sc := m.stripCols(); sc > 0 {
+		strip := hero.Frame(sc, m.height, hero.StripPose(sc, m.height), false, m.palette)
+		return lipgloss.JoinHorizontal(lipgloss.Top, strip, "  ", list)
+	}
+	return list
 }
 
 func (m Model) footer() string {
