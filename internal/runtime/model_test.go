@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/lowcache/volinit/internal/hero"
 	"github.com/lowcache/volinit/internal/registry"
 	"github.com/lowcache/volinit/internal/theme"
 )
@@ -15,7 +16,7 @@ func fixture() Model {
 		{Name: "cfg", Branch: registry.BranchSystem, Path: "/tmp/cfg", Actions: []registry.Action{
 			{Name: "switch"}, {Name: "build"},
 		}},
-	}, theme.Default(), nil)
+	}, theme.Default(), nil, hero.T1)
 }
 
 // press feeds one key and returns the model, dropping the command. No test
@@ -112,7 +113,7 @@ func TestFullBleedShowsNoActions(t *testing.T) {
 func TestDismissDoesNotAlsoAct(t *testing.T) {
 	m := New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
 		{Name: "deploy", Confirm: "Deploy live. Continue?"},
-	}}}, theme.Default(), nil)
+	}}}, theme.Default(), nil, hero.T1)
 
 	next, cmd := m.Update(enter)
 	if cmd != nil {
@@ -177,7 +178,7 @@ func TestViewListsEveryAction(t *testing.T) {
 
 // An empty fleet must not render as a blank alt screen with no way out.
 func TestZeroRowsSaysSoAndSaysHowToLeave(t *testing.T) {
-	m := dismiss(New(nil, theme.Default(), []string{"volinit: nothing found under /nowhere"}))
+	m := dismiss(New(nil, theme.Default(), []string{"volinit: nothing found under /nowhere"}, hero.T1))
 	v := m.View()
 	for _, want := range []string{"no runnable targets found", "q quits", "nothing found under /nowhere"} {
 		if !strings.Contains(v.Content, want) {
@@ -192,7 +193,7 @@ func TestZeroRowsSaysSoAndSaysHowToLeave(t *testing.T) {
 func TestEnterConfirmsBeforeRunning(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
 		{Name: "deploy", Confirm: "Deploy live. Continue?"},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -222,7 +223,7 @@ func TestEnterConfirmsBeforeRunning(t *testing.T) {
 func TestEnterCollectsParamBeforeRunning(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "anon-run", ParamName: "CMD", ParamPrompt: "Command to jail"},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -251,7 +252,7 @@ func TestEnterCollectsParamBeforeRunning(t *testing.T) {
 func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "switch", Detach: true, Gate: boolp(false)},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	if cmd == nil {
@@ -265,7 +266,7 @@ func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 func TestUnflaggedActionRunsImmediately(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "build"},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	if cmd == nil {
@@ -279,7 +280,7 @@ func TestUnflaggedActionRunsImmediately(t *testing.T) {
 func TestHeuristicGatedActionShowsConfirmPrompt(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "nix-config", Path: "/tmp/nix", Actions: []registry.Action{
 		{Name: "deploy"},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -298,7 +299,7 @@ func TestHeuristicGatedActionShowsConfirmPrompt(t *testing.T) {
 func TestGateFalseBypassesHeuristic(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "deploy", Gate: boolp(false)},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	if cmd == nil {
@@ -312,7 +313,7 @@ func TestGateFalseBypassesHeuristic(t *testing.T) {
 func TestGateTrueForcesConfirm(t *testing.T) {
 	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "build", Gate: boolp(true)},
-	}}}, theme.Default(), nil))
+	}}}, theme.Default(), nil, hero.T1))
 
 	next, cmd := m.Update(enter)
 	m = next.(Model)
@@ -324,6 +325,30 @@ func TestGateTrueForcesConfirm(t *testing.T) {
 	}
 }
 
+func TestQuitKeysLeaveStraightFromTheGreeting(t *testing.T) {
+	for _, k := range []string{"q", "esc", "ctrl+c"} {
+		next, cmd := fixture().Update(keyPress(k))
+		if cmd == nil {
+			t.Fatalf("%q at the greeting returned no command", k)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Errorf("%q at the greeting did not quit", k)
+		}
+		if !next.(Model).quit {
+			t.Errorf("%q at the greeting did not mark the model quit", k)
+		}
+	}
+}
+
+func TestT0OpensAtTheSidebar(t *testing.T) {
+	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "build"},
+	}}}, theme.Default(), nil, hero.T0)
+	if m.stage != stageSidebar {
+		t.Fatal("T0 prints State B directly: there is no greeting to dismiss")
+	}
+}
+
 // wide returns a model already past the greeting: these tests are about
 // scrolling the working list, not the dismiss.
 func wide(n int) Model {
@@ -331,7 +356,7 @@ func wide(n int) Model {
 	for i := 0; i < n; i++ {
 		actions = append(actions, registry.Action{Name: fmt.Sprintf("a%02d", i)})
 	}
-	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: actions}}, theme.Default(), nil)
+	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: actions}}, theme.Default(), nil, hero.T1)
 	return dismiss(m)
 }
 

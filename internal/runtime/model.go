@@ -62,15 +62,18 @@ type Model struct {
 	quit    bool
 }
 
-func New(repos []registry.Repo, p theme.Palette, notices []string) Model {
+func New(repos []registry.Repo, p theme.Palette, notices []string, tier hero.Tier) Model {
 	var rows []row
 	for _, r := range repos {
 		for _, a := range r.Actions {
 			rows = append(rows, row{repo: r.Name, path: r.Path, action: a})
 		}
 	}
-	tier := hero.Detect(os.Getenv, term.IsTerminal(os.Stdout.Fd()))
-	return Model{rows: rows, palette: p, notices: notices, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	m := Model{rows: rows, palette: p, notices: notices, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	if tier == hero.T0 {
+		m.stage = stageSidebar // T0 prints State B directly, with no transition
+	}
+	return m
 }
 
 // Init satisfies tea.Model. v2's Model.Init returns only a Cmd (unlike the
@@ -96,11 +99,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// The greeting dismisses on the first key of any kind and consumes it:
-	// it must never also act, since several fleet targets send irreversible
-	// mail or deploy live sites. This is the only place stageSidebar is
-	// assigned; stageFullBleed is never assigned outside New.
 	if m.stage == stageFullBleed {
+		// Quit keys leave straight from the greeting. Any other key dismisses
+		// and is consumed: several fleet targets send mail or deploy live sites.
+		switch k.String() {
+		case "q", "esc", "ctrl+c":
+			m.quit = true
+			return m, tea.Quit
+		}
 		m.stage = stageSidebar
 		return m, nil
 	}
@@ -317,6 +323,7 @@ func (m Model) footer() string {
 // Run starts the cockpit. Bubble Tea restores the terminal on panic and
 // SIGINT itself, so no guard is wrapped around this.
 func Run(repos []registry.Repo, p theme.Palette, notices []string) error {
-	_, err := tea.NewProgram(New(repos, p, notices)).Run()
+	tier := hero.Detect(os.Getenv, term.IsTerminal(os.Stdout.Fd()))
+	_, err := tea.NewProgram(New(repos, p, notices, tier)).Run()
 	return err
 }
