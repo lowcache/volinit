@@ -51,6 +51,10 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyBackspace}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
 	default:
 		return typed([]rune(s)[0])
 	}
@@ -62,6 +66,29 @@ func dismiss(m Model) Model {
 	next, _ := m.Update(typed(' '))
 	next, _ = next.(Model).Update(typed(' '))
 	return next.(Model)
+}
+
+// tasks dismisses the greeting, then opens the first door and its first
+// subsystem: the task level, the only place enter runs anything.
+func tasks(m Model) Model {
+	m = dismiss(m)
+	for i := 0; i < 2; i++ {
+		next, _ := m.Update(enter)
+		m = next.(Model)
+	}
+	return m
+}
+
+// menuFixture spans all three doors, with a sectioned system repo.
+func menuFixture() Model {
+	return New([]registry.Repo{
+		{Name: "cfg", Path: "/tmp/cfg", Branch: registry.BranchSystem, Actions: []registry.Action{
+			{Name: "switch", Section: "System Operations"},
+			{Name: "sops-edit", Section: "Secret Management"},
+		}},
+		{Name: "wiki", Path: "/tmp/wiki", Branch: registry.BranchWriting, Actions: []registry.Action{{Name: "serve"}}},
+		{Name: "app", Path: "/tmp/app", Branch: registry.BranchCode, Actions: []registry.Action{{Name: "test"}}},
+	}, theme.Default(), nil, hero.T1)
 }
 
 func TestStartsFullBleed(t *testing.T) {
@@ -175,7 +202,7 @@ func TestMorphFrameFillsTheTerminal(t *testing.T) {
 }
 
 func TestDownMovesTheCursor(t *testing.T) {
-	m := dismiss(fixture())
+	m := tasks(fixture())
 	next, _ := m.Update(typed('j'))
 	if next.(Model).cursor != 1 {
 		t.Errorf("cursor = %d, want 1", next.(Model).cursor)
@@ -183,7 +210,7 @@ func TestDownMovesTheCursor(t *testing.T) {
 }
 
 func TestCursorStopsAtTheEnd(t *testing.T) {
-	m := dismiss(fixture())
+	m := tasks(fixture())
 	m.cursor = 1
 	next, _ := m.Update(typed('j'))
 	if next.(Model).cursor != 1 {
@@ -192,7 +219,7 @@ func TestCursorStopsAtTheEnd(t *testing.T) {
 }
 
 func TestUpMovesTheCursorAndStopsAtTheTop(t *testing.T) {
-	m := dismiss(fixture())
+	m := tasks(fixture())
 	m.cursor = 1
 	m = press(t, m, typed('k'))
 	if m.cursor != 0 {
@@ -214,7 +241,7 @@ func TestQuitAsksTheProgramToStop(t *testing.T) {
 }
 
 func TestViewListsEveryAction(t *testing.T) {
-	v := dismiss(fixture()).View()
+	v := tasks(fixture()).View()
 	for _, want := range []string{"switch", "build"} {
 		if !strings.Contains(v.Content, want) {
 			t.Errorf("view missing %q:\n%s", want, v.Content)
@@ -237,7 +264,7 @@ func TestZeroRowsSaysSoAndSaysHowToLeave(t *testing.T) {
 }
 
 func TestEnterConfirmsBeforeRunning(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "blog", Path: "/tmp/blog", Actions: []registry.Action{
 		{Name: "deploy", Confirm: "Deploy live. Continue?"},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -267,7 +294,7 @@ func TestEnterConfirmsBeforeRunning(t *testing.T) {
 }
 
 func TestEnterCollectsParamBeforeRunning(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "anon-run", ParamName: "CMD", ParamPrompt: "Command to jail"},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -296,7 +323,7 @@ func TestEnterCollectsParamBeforeRunning(t *testing.T) {
 }
 
 func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "switch", Detach: true, Gate: boolp(false)},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -310,7 +337,7 @@ func TestDetachedActionStartsWithoutSuspending(t *testing.T) {
 }
 
 func TestUnflaggedActionRunsImmediately(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "build"},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -324,7 +351,7 @@ func TestUnflaggedActionRunsImmediately(t *testing.T) {
 }
 
 func TestHeuristicGatedActionShowsConfirmPrompt(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "nix-config", Path: "/tmp/nix", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "nix-config", Path: "/tmp/nix", Actions: []registry.Action{
 		{Name: "deploy"},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -343,7 +370,7 @@ func TestHeuristicGatedActionShowsConfirmPrompt(t *testing.T) {
 }
 
 func TestGateFalseBypassesHeuristic(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "deploy", Gate: boolp(false)},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -357,7 +384,7 @@ func TestGateFalseBypassesHeuristic(t *testing.T) {
 }
 
 func TestGateTrueForcesConfirm(t *testing.T) {
-	m := dismiss(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+	m := tasks(New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
 		{Name: "build", Gate: boolp(true)},
 	}}}, theme.Default(), nil, hero.T1))
 
@@ -403,7 +430,7 @@ func wide(n int) Model {
 		actions = append(actions, registry.Action{Name: fmt.Sprintf("a%02d", i)})
 	}
 	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: actions}}, theme.Default(), nil, hero.T1)
-	return dismiss(m)
+	return tasks(m)
 }
 
 func TestViewRendersOnlyWhatFits(t *testing.T) {
@@ -470,7 +497,7 @@ func TestGreetingDrawsTheAssembly(t *testing.T) {
 }
 
 func TestSidebarPutsTheAssemblyBesideTheList(t *testing.T) {
-	m, _ := mustUpdate(t, dismiss(fixture()), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m, _ := mustUpdate(t, tasks(fixture()), tea.WindowSizeMsg{Width: 120, Height: 30})
 	v := m.View().Content
 	if !hasBraille(v) {
 		t.Fatal("the sidebar lost the assembly")
@@ -499,5 +526,83 @@ func TestT0SidebarHasNoArt(t *testing.T) {
 	}}}, theme.Default(), nil, hero.T0)
 	if hasBraille(m.View().Content) {
 		t.Error("T0 prints plain text: no art")
+	}
+}
+
+func TestTopLevelIsTheThreeDoors(t *testing.T) {
+	v := dismiss(menuFixture()).View().Content
+	for _, want := range []string{"System", "2 subsystems", "Writing", "1 site", "Code", "1 project"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("door level missing %q:\n%s", want, v)
+		}
+	}
+	if strings.Contains(v, "switch") {
+		t.Error("the door level must not list tasks")
+	}
+}
+
+func TestEnterOpensDownToTheTasks(t *testing.T) {
+	m := dismiss(menuFixture())
+	m = press(t, m, enter)      // System
+	m = press(t, m, typed('j')) // Secret Management
+	m = press(t, m, enter)
+	v := m.View().Content
+	if !strings.Contains(v, "System › Secret Management") {
+		t.Errorf("breadcrumb missing:\n%s", v)
+	}
+	if !strings.Contains(v, "sops-edit") || strings.Contains(v, "switch") {
+		t.Errorf("wrong tasks listed:\n%s", v)
+	}
+}
+
+func TestBackLandsWhereYouCameFrom(t *testing.T) {
+	for _, k := range []string{"esc", "h", "left", "backspace"} {
+		m := dismiss(menuFixture())
+		m = press(t, m, typed('j')) // Writing
+		m = press(t, m, enter)
+		m = press(t, m, keyPress(k))
+		if m.quit {
+			t.Errorf("%q inside the menu quit instead of going back", k)
+		}
+		if len(m.path) != 0 || m.cursor != 1 {
+			t.Errorf("%q: path %v cursor %d, want the door level on Writing", k, m.path, m.cursor)
+		}
+	}
+}
+
+func TestEscAtTheTopQuits(t *testing.T) {
+	next, cmd := dismiss(menuFixture()).Update(keyPress("esc"))
+	if cmd == nil || !next.(Model).quit {
+		t.Fatal("esc at the door level must quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("esc at the door level did not return tea.Quit")
+	}
+}
+
+// l and right open doors and subsystems; only enter runs a target.
+func TestLOpensButNeverRuns(t *testing.T) {
+	m := dismiss(menuFixture())
+	m = press(t, m, keyPress("l"))
+	m = press(t, m, keyPress("right"))
+	if !m.atTasks() {
+		t.Fatal("l and right must open doors and subsystems")
+	}
+	for _, k := range []string{"l", "right"} {
+		next, cmd := m.Update(keyPress(k))
+		if cmd != nil || next.(Model).mode != modeList {
+			t.Fatalf("%q at the task level acted on a target", k)
+		}
+	}
+}
+
+// Models are values and path is a slice: back() leaves spare capacity, so an
+// open() that appended in place would rewrite the older model's path.
+func TestOpeningDoesNotRewriteAnEarlierModel(t *testing.T) {
+	deep := press(t, press(t, press(t, dismiss(menuFixture()), enter), typed('j')), enter)
+	up := press(t, deep, keyPress("esc")) // back to System, on Secret Management
+	press(t, press(t, up, typed('k')), enter)
+	if got := deep.crumb(); got != "System › Secret Management" {
+		t.Fatalf("an older model's path was rewritten: %q", got)
 	}
 }

@@ -18,7 +18,11 @@ import (
 	"github.com/lowcache/volinit/internal/theme"
 )
 
+// row is one entry at the current menu level. repo, path and action are
+// set only at the task level.
 type row struct {
+	label  string
+	detail string
 	repo   string
 	path   string
 	action registry.Action
@@ -66,9 +70,11 @@ const (
 	minStripWidth = 72 // below this the list gets every column
 )
 
-// Model is the cockpit state. Flat list for now; the tree lands with the
-// visual design.
+// Model is the cockpit state: a three-level menu (doors, subsystems, tasks)
+// walked by path, with rows holding the current level's entries.
 type Model struct {
+	menu    []registry.Door
+	path    []int // entry chosen at each level above the current one
 	rows    []row
 	cursor  int
 	offset  int // index of the first visible row
@@ -86,17 +92,74 @@ type Model struct {
 }
 
 func New(repos []registry.Repo, p theme.Palette, notices []string, tier hero.Tier) Model {
-	var rows []row
-	for _, r := range repos {
-		for _, a := range r.Actions {
-			rows = append(rows, row{repo: r.Name, path: r.Path, action: a})
-		}
-	}
-	m := Model{rows: rows, palette: p, notices: notices, width: defaultWidth, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	m := Model{menu: registry.Menu(repos), palette: p, notices: notices, width: defaultWidth, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	m.load()
 	if tier == hero.T0 {
 		m.stage = stageSidebar // T0 prints State B directly, with no transition
 	}
 	return m
+}
+
+// atTasks reports the task level: the only level where enter runs anything.
+func (m Model) atTasks() bool { return len(m.path) == 2 }
+
+// load fills rows with the entries of the level path points at.
+func (m *Model) load() {
+	var rows []row
+	switch len(m.path) {
+	case 0:
+		for _, d := range m.menu {
+			rows = append(rows, row{label: d.Name, detail: count(len(d.Groups), d.Noun)})
+		}
+	case 1:
+		for _, g := range m.menu[m.path[0]].Groups {
+			rows = append(rows, row{label: g.Name, detail: count(len(g.Actions), "tasks")})
+		}
+	default:
+		g := m.menu[m.path[0]].Groups[m.path[1]]
+		for _, a := range g.Actions {
+			rows = append(rows, row{label: a.Name, detail: a.Description, repo: g.Repo, path: g.Path, action: a})
+		}
+	}
+	m.rows = rows
+}
+
+// open descends into the entry under the cursor.
+func (m Model) open() Model {
+	// Copy before appending: earlier Models may share this backing array.
+	m.path = append(append([]int(nil), m.path...), m.cursor)
+	m.cursor, m.offset = 0, 0
+	m.load()
+	return m
+}
+
+// back climbs one level, landing on the entry it came from.
+func (m Model) back() Model {
+	last := m.path[len(m.path)-1]
+	m.path = m.path[:len(m.path)-1]
+	m.load()
+	m.cursor, m.offset = last, 0
+	m.clamp()
+	return m
+}
+
+// crumb names the path, e.g. "System › Secret Management"; empty at the doors.
+func (m Model) crumb() string {
+	switch len(m.path) {
+	case 0:
+		return ""
+	case 1:
+		return m.menu[m.path[0]].Name
+	}
+	return m.menu[m.path[0]].Name + " › " + m.menu[m.path[0]].Groups[m.path[1]].Name
+}
+
+// count reads "1 site", "4 sites".
+func count(n int, noun string) string {
+	if n == 1 {
+		noun = strings.TrimSuffix(noun, "s")
+	}
+	return fmt.Sprintf("%d %s", n, noun)
 }
 
 // Init satisfies tea.Model. v2's Model.Init returns only a Cmd (unlike the
@@ -178,9 +241,17 @@ func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch k.String() {
-	case "q", "esc", "ctrl+c":
+	case "q", "ctrl+c":
 		m.quit = true
 		return m, tea.Quit
+	case "esc", "h", "left", "backspace":
+		if len(m.path) > 0 {
+			return m.back(), nil
+		}
+		if k.String() == "esc" {
+			m.quit = true
+			return m, tea.Quit
+		}
 	case "j", "down":
 		if m.cursor < len(m.rows)-1 {
 			m.cursor++
@@ -191,9 +262,16 @@ func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 			m.clamp()
 		}
+	case "l", "right":
+		if !m.atTasks() && len(m.rows) > 0 {
+			return m.open(), nil
+		}
 	case "enter":
 		if len(m.rows) == 0 {
 			return m, nil
+		}
+		if !m.atTasks() {
+			return m.open(), nil
 		}
 		m.status = ""
 		if m.rows[m.cursor].action.ParamName != "" {
@@ -247,14 +325,18 @@ func (m Model) start() (tea.Model, tea.Cmd) {
 	})
 }
 
-// visible is how many list rows fit: the terminal minus the notice lines and
-// the footer.
+// visible is how many list rows fit: the terminal minus the notice lines,
+// the breadcrumb when there is one, and the footer.
 func (m Model) visible() int {
 	h := m.height
 	if h <= 0 {
 		h = defaultHeight
 	}
-	if n := h - len(m.notices) - 1; n > 0 {
+	chrome := len(m.notices) + 1
+	if len(m.path) > 0 {
+		chrome++
+	}
+	if n := h - chrome; n > 0 {
 		return n
 	}
 	return 1
@@ -329,6 +411,11 @@ func (m Model) viewSidebar() string {
 		b.WriteString("\n")
 	}
 
+	if c := m.crumb(); c != "" {
+		b.WriteString(fg.Render(c))
+		b.WriteString("\n")
+	}
+
 	if len(m.rows) == 0 {
 		// Never leave the operator staring at a blank alt screen with no way
 		// out: an empty fleet says so, and says how to leave.
@@ -341,7 +428,7 @@ func (m Model) viewSidebar() string {
 		}
 		for i := m.offset; i < end; i++ {
 			r := m.rows[i]
-			line := fmt.Sprintf("  %-14s %-18s %s", r.repo, r.action.Name, r.action.Description)
+			line := fmt.Sprintf("  %-26s %s", r.label, r.detail)
 			if i == m.cursor {
 				b.WriteString(sel.Render("▸" + line))
 			} else {
@@ -380,7 +467,13 @@ func (m Model) footer() string {
 	if len(m.rows) == 0 {
 		return "q quits"
 	}
-	keys := "j/k move · enter runs · q quits"
+	keys := "j/k move · enter opens · q quits"
+	switch {
+	case m.atTasks():
+		keys = "j/k move · enter runs · esc back · q quits"
+	case len(m.path) > 0:
+		keys = "j/k move · enter opens · esc back · q quits"
+	}
 	if m.status != "" {
 		return fmt.Sprintf("%s   %s", m.status, keys)
 	}
