@@ -27,17 +27,24 @@ fallback, sidecar, doctor), `internal/theme` (noctalia M3 palette),
 `internal/run` (foreground + detached commands), `internal/runtime` (Bubble
 Tea cockpit), `internal/hero` (tier detection).
 
-## Do these, in order (updated 2026-09-18, second session)
+## Do these, in order (updated 2026-09-18, end of second session)
 
-1. **Execute `docs/superpowers/plans/2026-09-18-volinit-hero-t1-art.md`**,
-   Tasks 3–7. Tasks 4–5 (canvas, assembly) were compiled and tested from
-   the plan text before commit: 22 hero tests green, 609µs per 240×70
-   frame. Tasks 3, 6, 7 (runtime) are unverified until implemented.
-2. After Task 7: `nix flake check`, then the operator reviews the greeting,
-   morph and strip at a real terminal. Known tuning item: the assembled
-   strip's plate seams read as a dense texture at R=10.
+1. **Operator's visual review** at a real terminal: `nix build .#default &&
+   ./result/bin/volinit`. Greeting, morph, strip and menu are all built.
+   Known items: the assembled strip reads as a dense block (seams 2 dots
+   apart); the menu is top-aligned while the strip is centred; the only
+   animation is the morph.
+2. Open threads, none started: the opening sequence (spec'd, content
+   undesigned); a strip that reacts to the menu position; evaluating the
+   sidecar `when` field (decoded, evaluated nowhere); wiring into the shell
+   (build-order step 7); the merge decision (main is a live flake input).
 
 Done this session — do not redo:
+
+* Hero art plan (`2026-09-18-volinit-hero-t1-art.md`) Tasks 3–7 executed:
+  braille canvas, volnix assembly, greeting, strip, morph.
+* Menu plan (`2026-09-18-volinit-menu.md`) executed: three doors (System /
+  Writing / Code) → subsystems → tasks; `help` targets dropped.
 
 * Hero Tasks 1+2 reviewed and approved (real base `6a7c820`; the
   `f8e0a1c` cited earlier never existed). One finding, folded into Task 3:
