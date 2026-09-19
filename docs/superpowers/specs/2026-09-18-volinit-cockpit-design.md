@@ -359,3 +359,46 @@ not built.
 `q`, `esc` and `ctrl+c` quit straight from State A. Every other key starts
 the morph and does nothing else; a key during the morph lands in State B
 immediately and is likewise consumed.
+
+---
+
+# Addendum — the menu (2026-09-18, operator-directed)
+
+Supersedes the flat list and gives the **Tree** section its shape. The
+operator found 101 flat actions unpalatable and chose three doors.
+
+## Shape
+
+Three levels: **door → subsystem → task.**
+
+| door | subsystems |
+|---|---|
+| System | one per Makefile section of each system repo, in Makefile order; unsectioned targets group under the repo's name |
+| Writing | one per repo, by name |
+| Code | one per repo, by name; any repo not classified system or writing lands here |
+
+* Section names show as written — no rename table to keep in sync.
+* `help` targets are dropped: they print the Makefile's own list, which the
+  menu replaces.
+* A door with nothing in it is not shown.
+
+## Keys
+
+| key | door / subsystem level | task level |
+|---|---|---|
+| `j` `k` `↓` `↑` | move | move |
+| `enter` | open | run (param and confirm gates unchanged) |
+| `l` `→` | open | nothing — only `enter` runs a target |
+| `esc` `h` `←` `backspace` | back; `esc` at the top quits | back |
+| `q` `ctrl+c` | quit | quit |
+
+Going back lands the cursor on the entry you came from. A breadcrumb
+(`System › Secret Management`) heads every level below the doors. Doors
+show a count ("9 subsystems"), subsystems a task count, tasks their
+description.
+
+## Out of scope
+
+* Evaluating the sidecar's `when` field: it is decoded but evaluated
+  nowhere, so phone-only targets still show on the laptop. Separate work.
+* Tying the sidebar assembly to the menu position.
