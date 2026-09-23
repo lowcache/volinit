@@ -43,7 +43,8 @@ const (
 type stage int
 
 const (
-	stageFullBleed stage = iota // the greeting: the assembly exploded, edge to edge
+	stageOpening   stage = iota // the arrival: the stack slams shut, then blows apart
+	stageFullBleed              // the greeting: the assembly exploded, edge to edge
 	stageMorph                  // the one-way transition; any key lands it
 	stageSidebar                // the working state: assembly in a strip, list live
 )
@@ -53,11 +54,28 @@ const (
 	morphInterval = 16 * time.Millisecond
 )
 
+// The opening's three phases. The stack falls inward from beyond the canvas,
+// holds shut for a beat, then explodes into the greeting.
+const (
+	convergeFrames = 14
+	holdFrames     = 4
+	explodeFrames  = 18
+	openFrames     = convergeFrames + holdFrames + explodeFrames
+	openInterval   = morphInterval
+)
+
 // morphMsg advances the morph one frame.
 type morphMsg struct{}
 
 func morphTick() tea.Cmd {
 	return tea.Tick(morphInterval, func(time.Time) tea.Msg { return morphMsg{} })
+}
+
+// openMsg advances the opening one frame.
+type openMsg struct{}
+
+func openTick() tea.Cmd {
+	return tea.Tick(openInterval, func(time.Time) tea.Msg { return openMsg{} })
 }
 
 // defaultHeight stands in until the first WindowSizeMsg arrives, which is
@@ -92,7 +110,7 @@ type Model struct {
 }
 
 func New(repos []registry.Repo, p theme.Palette, notices []string, tier hero.Tier) Model {
-	m := Model{menu: registry.Menu(repos), palette: p, notices: notices, width: defaultWidth, height: defaultHeight, stage: stageFullBleed, tier: tier}
+	m := Model{menu: registry.Menu(repos), palette: p, notices: notices, width: defaultWidth, height: defaultHeight, stage: stageOpening, tier: tier}
 	m.load()
 	if tier == hero.T0 {
 		m.stage = stageSidebar // T0 prints State B directly, with no transition
@@ -165,7 +183,14 @@ func count(n int, noun string) string {
 // Init satisfies tea.Model. v2's Model.Init returns only a Cmd (unlike the
 // (Model, Cmd) shape used elsewhere in this file's Update) — verified via
 // `go doc charm.land/bubbletea/v2 Model` against the vendored v2.0.9.
-func (m Model) Init() tea.Cmd { return nil }
+// Init starts the opening. Every other stage is driven by a key or by the
+// tick it returned itself, so they need nothing here.
+func (m Model) Init() tea.Cmd {
+	if m.stage == stageOpening {
+		return openTick()
+	}
+	return nil
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -178,6 +203,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.status = msg.Action + " finished"
 		}
+	case openMsg:
+		// A tick can arrive after a key already landed the opening; drop it.
+		if m.stage != stageOpening {
+			return m, nil
+		}
+		m.frame++
+		if m.frame >= openFrames {
+			m.stage = stageFullBleed
+			m.frame = 0 // the morph shares this counter and must start at zero
+			return m, nil
+		}
+		return m, openTick()
 	case morphMsg:
 		// A tick can arrive after a key already landed the morph; drop it.
 		if m.stage != stageMorph {
@@ -197,6 +234,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.stage {
+	case stageOpening:
+		// Quit keys leave from the opening exactly as they do from the
+		// greeting: the operator never has to sit through an animation.
+		switch k.String() {
+		case "q", "esc", "ctrl+c":
+			m.quit = true
+			return m, tea.Quit
+		}
+		// Interruptible: land the greeting now, and consume this key too.
+		m.stage = stageFullBleed
+		m.frame = 0
+		return m, nil
 	case stageFullBleed:
 		// Quit keys leave straight from the greeting. Any other key starts the
 		// morph and is consumed: several fleet targets send mail or deploy.
@@ -362,6 +411,8 @@ func (m *Model) clamp() {
 func (m Model) View() tea.View {
 	var content string
 	switch m.stage {
+	case stageOpening:
+		content = hero.Frame(m.width, m.height, m.openingPose(), false, m.palette)
 	case stageFullBleed:
 		pose, labels := hero.GreetingPose(m.width, m.height)
 		content = hero.Frame(m.width, m.height, pose, labels, m.palette)
@@ -383,6 +434,30 @@ func (m Model) viewMorph() string {
 	t := ease(float64(m.frame) / morphFrames)
 	return hero.Frame(m.width, m.height, hero.Lerp(from, to, t), false, m.palette)
 }
+
+// openingPose is the assembly's pose at m.frame of the opening: it falls in
+// from past the canvas, holds shut, then explodes into the greeting. Only
+// Spread moves, so the stack arrives exactly where the greeting leaves it.
+func (m Model) openingPose() hero.Pose {
+	greet, _ := hero.GreetingPose(m.width, m.height)
+	shut := greet
+	shut.Spread = 0
+
+	switch f := m.frame; {
+	case f < convergeFrames:
+		return hero.Lerp(hero.OpeningPose(m.width, m.height), shut, easeIn(float64(f)/convergeFrames))
+	case f < convergeFrames+holdFrames:
+		return shut
+	default:
+		return hero.Lerp(shut, greet, easeOut(float64(f-convergeFrames-holdFrames)/explodeFrames))
+	}
+}
+
+// easeIn is cubic: the plates drift, then slam shut.
+func easeIn(t float64) float64 { return t * t * t }
+
+// easeOut is cubic: the explosion breaks fast and drifts into place.
+func easeOut(t float64) float64 { return 1 - math.Pow(1-t, 3) }
 
 // ease is cubic in-out: the parts start gently and settle gently.
 func ease(t float64) float64 {

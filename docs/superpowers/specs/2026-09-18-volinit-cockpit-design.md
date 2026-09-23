@@ -402,3 +402,57 @@ description.
 * Evaluating the sidecar's `when` field: it is decoded but evaluated
   nowhere, so phone-only targets still show on the laptop. Separate work.
 * Tying the sidebar assembly to the menu position.
+
+---
+
+# Addendum — the opening sequence (2026-09-22, operator-directed)
+
+Supersedes the Playback section's adaptive-depth rule and fills in the
+content the Hero section left undesigned.
+
+## The motion
+
+The greeting is not a frame that appears; it is a frame that arrives. Three
+phases, one stage, all on `GreetingPose`'s geometry — only `Spread` moves,
+so the assembly lands exactly where the greeting leaves it.
+
+| phase | frames | Spread | easing | reads as |
+|---|---|---|---|---|
+| converge | 14 | 1.9 → 0 | cubic in | plates fall inward from beyond the canvas and slam shut |
+| hold | 4 | 0 | — | a beat of stillness: the machine cohered |
+| explode | 18 | 0 → 1 | cubic out | the stack blows apart and settles into the greeting |
+
+36 frames at 16ms: **576ms**. Lettering, leaders and the phone are off for
+all 36 and arrive with the settled greeting, the same convention the morph
+already follows.
+
+`Spread` above 1 puts the outer plates off-canvas; `Canvas.Set` drops dots
+that land outside, so the overshoot costs nothing and needs no clipping.
+
+## Adaptive depth is dropped
+
+The Playback section specified the full sequence once per boot or palette
+change, flagged in `$XDG_RUNTIME_DIR`, with the settled frame thereafter.
+**That rule is withdrawn.** The opening plays on every terminal.
+
+Its justification was cost, and the cost went away: the disk frame cache was
+dropped on measured evidence (609µs per frame), which puts the whole
+sequence at roughly 22ms of render. What remained was a taste argument, and
+it loses to "identity first" — the same reasoning that makes the morph
+non-adaptive. The runtime-dir flag, and its stale-flag failure modes, are
+not built.
+
+## Interruption
+
+Any key lands the greeting immediately and is consumed; `q`, `esc` and
+`ctrl+c` quit outright, exactly as they do from the greeting. The operator
+never waits on an animation, which is what makes playing it every time free
+in practice.
+
+T0 has no opening at all — it still prints State B directly.
+
+## What this costs elsewhere
+
+The opening and the morph share one frame counter. The opening resets it to
+zero on both exits, natural and interrupted; otherwise the morph's first
+frame computes past the strip it is travelling to. This is pinned by test.

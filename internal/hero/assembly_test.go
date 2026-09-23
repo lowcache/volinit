@@ -156,3 +156,36 @@ func TestGreetingFrameWithinBudget(t *testing.T) {
 		t.Fatalf("frame took %v, budget %v", avg, budget)
 	}
 }
+
+func TestOpeningPoseOvershootsTheGreeting(t *testing.T) {
+	const cols, rows = 200, 50
+	greet, _ := GreetingPose(cols, rows)
+	open := OpeningPose(cols, rows)
+	if open.CX != greet.CX || open.CY != greet.CY || open.R != greet.R {
+		t.Errorf("the opening must sit where the greeting sits: %+v vs %+v", open, greet)
+	}
+	if open.Spread <= greet.Spread {
+		t.Errorf("the opening starts past fully exploded, Spread = %v", open.Spread)
+	}
+}
+
+// The over-exploded stack runs off the canvas by design and Canvas.Set drops
+// what lands outside. What must not happen is a torn frame or a blank one.
+func TestOverExplodedStackStaysInsideItsFrame(t *testing.T) {
+	for _, g := range [][2]int{{200, 50}, {80, 24}, {30, 40}} {
+		cols, rows := g[0], g[1]
+		out := Draw(cols, rows, OpeningPose(cols, rows), false).Plain()
+		lines := strings.Split(out, "\n")
+		if len(lines) != rows {
+			t.Fatalf("%dx%d: %d lines", cols, rows, len(lines))
+		}
+		for i, l := range lines {
+			if n := utf8.RuneCountInString(l); n != cols {
+				t.Fatalf("%dx%d: line %d is %d wide", cols, rows, i, n)
+			}
+		}
+		if strings.TrimSpace(strings.ReplaceAll(out, "\n", "")) == "" {
+			t.Errorf("%dx%d: the opening frame drew nothing", cols, rows)
+		}
+	}
+}

@@ -60,10 +60,27 @@ func keyPress(s string) tea.KeyPressMsg {
 	}
 }
 
-// dismiss advances a fresh model past the greeting and the morph so a test
-// can exercise the working state without exercising either.
-func dismiss(m Model) Model {
+// greeted cuts the opening short, leaving the model at the greeting so a
+// test can exercise the greeting itself.
+func greeted(m Model) Model {
 	next, _ := m.Update(typed(' '))
+	return next.(Model)
+}
+
+// played runs the opening to its end instead, the way a terminal nobody
+// touches does.
+func played(m Model) Model {
+	for i := 0; i < openFrames; i++ {
+		next, _ := m.Update(openMsg{})
+		m = next.(Model)
+	}
+	return m
+}
+
+// dismiss advances a fresh model past the opening, the greeting and the
+// morph so a test can exercise the working state without exercising any.
+func dismiss(m Model) Model {
+	next, _ := greeted(m).Update(typed(' '))
 	next, _ = next.(Model).Update(typed(' '))
 	return next.(Model)
 }
@@ -91,15 +108,8 @@ func menuFixture() Model {
 	}, theme.Default(), nil, hero.T1)
 }
 
-func TestStartsFullBleed(t *testing.T) {
-	m := fixture()
-	if m.stage != stageFullBleed {
-		t.Fatal("a fresh cockpit must open at full bleed")
-	}
-}
-
 func TestAnyKeyStartsTheMorph(t *testing.T) {
-	next, cmd := fixture().Update(keyPress("x"))
+	next, cmd := greeted(fixture()).Update(keyPress("x"))
 	if next.(Model).stage != stageMorph {
 		t.Fatal("any key must start the morph")
 	}
@@ -111,7 +121,7 @@ func TestAnyKeyStartsTheMorph(t *testing.T) {
 // TestTheDoorIsOneWay pins the one-way door: once dismissed, nothing the
 // model handles — keys, morph ticks, a resize — may reopen the greeting.
 func TestTheDoorIsOneWay(t *testing.T) {
-	var next tea.Model = fixture()
+	var next tea.Model = greeted(fixture())
 	next, _ = next.Update(keyPress("x"))
 	msgs := []tea.Msg{morphMsg{}, morphMsg{}}
 	for _, k := range []string{
@@ -123,7 +133,7 @@ func TestTheDoorIsOneWay(t *testing.T) {
 	msgs = append(msgs, tea.WindowSizeMsg{Width: 120, Height: 40})
 	for _, msg := range msgs {
 		next, _ = next.(Model).Update(msg)
-		if next.(Model).stage == stageFullBleed {
+		if st := next.(Model).stage; st == stageFullBleed || st == stageOpening {
 			t.Fatalf("%#v reopened the greeting", msg)
 		}
 	}
@@ -136,7 +146,7 @@ func TestDismissDoesNotAlsoAct(t *testing.T) {
 		{Name: "deploy", Confirm: "Deploy live. Continue?"},
 	}}}, theme.Default(), nil, hero.T1)
 
-	next, cmd := m.Update(enter)
+	next, cmd := greeted(m).Update(enter)
 	if got := next.(Model); got.stage != stageMorph || got.mode != modeList {
 		t.Fatal("enter at the greeting must start the morph and nothing else")
 	}
@@ -156,14 +166,14 @@ func TestDismissDoesNotAlsoAct(t *testing.T) {
 }
 
 func TestFullBleedShowsNoActions(t *testing.T) {
-	v := fixture().View()
+	v := greeted(fixture()).View()
 	if strings.Contains(v.Content, "switch") {
 		t.Fatal("the greeting must show art only, no action list")
 	}
 }
 
 func TestMorphRunsToTheSidebar(t *testing.T) {
-	next, cmd := fixture().Update(keyPress("x"))
+	next, cmd := greeted(fixture()).Update(keyPress("x"))
 	for i := 0; i < morphFrames; i++ {
 		if cmd == nil {
 			t.Fatalf("the morph stopped ticking after %d frames", i)
@@ -186,7 +196,7 @@ func TestStaleTickIsIgnored(t *testing.T) {
 }
 
 func TestMorphFrameFillsTheTerminal(t *testing.T) {
-	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m, _ := mustUpdate(t, greeted(fixture()), tea.WindowSizeMsg{Width: 120, Height: 30})
 	m, _ = mustUpdate(t, m, keyPress("x"))
 	m, _ = mustUpdate(t, m, morphMsg{})
 	v := m.View().Content
@@ -400,7 +410,7 @@ func TestGateTrueForcesConfirm(t *testing.T) {
 
 func TestQuitKeysLeaveStraightFromTheGreeting(t *testing.T) {
 	for _, k := range []string{"q", "esc", "ctrl+c"} {
-		next, cmd := fixture().Update(keyPress(k))
+		next, cmd := greeted(fixture()).Update(keyPress(k))
 		if cmd == nil {
 			t.Fatalf("%q at the greeting returned no command", k)
 		}
@@ -486,7 +496,7 @@ func hasBraille(s string) bool {
 }
 
 func TestGreetingDrawsTheAssembly(t *testing.T) {
-	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 200, Height: 50})
+	m, _ := mustUpdate(t, greeted(fixture()), tea.WindowSizeMsg{Width: 200, Height: 50})
 	v := m.View().Content
 	if !hasBraille(v) {
 		t.Fatal("the greeting drew no art")
@@ -604,5 +614,132 @@ func TestOpeningDoesNotRewriteAnEarlierModel(t *testing.T) {
 	press(t, press(t, up, typed('k')), enter)
 	if got := deep.crumb(); got != "System › Secret Management" {
 		t.Fatalf("an older model's path was rewritten: %q", got)
+	}
+}
+
+func TestStartsAtTheOpening(t *testing.T) {
+	if m := fixture(); m.stage != stageOpening {
+		t.Fatalf("a fresh cockpit must open with the assembly coming together, got stage %d", m.stage)
+	}
+}
+
+func TestOpeningIsGivenATickToDriveIt(t *testing.T) {
+	if fixture().Init() == nil {
+		t.Fatal("the opening would never advance: Init returned no tick")
+	}
+}
+
+func TestT0IsGivenNoOpeningTick(t *testing.T) {
+	m := New([]registry.Repo{{Name: "cfg", Path: "/tmp/cfg", Actions: []registry.Action{
+		{Name: "build"},
+	}}}, theme.Default(), nil, hero.T0)
+	if m.Init() != nil {
+		t.Fatal("T0 has no opening to drive")
+	}
+}
+
+func TestOpeningRunsToTheGreeting(t *testing.T) {
+	var next tea.Model = fixture()
+	cmd := next.(Model).Init()
+	for i := 0; i < openFrames; i++ {
+		if cmd == nil {
+			t.Fatalf("the opening stopped ticking after %d frames", i)
+		}
+		next, cmd = next.(Model).Update(openMsg{})
+	}
+	if next.(Model).stage != stageFullBleed {
+		t.Fatal("the opening never settled into the greeting")
+	}
+	if cmd != nil {
+		t.Error("a settled opening kept ticking")
+	}
+}
+
+// The opening shares the frame counter with the morph. Left at openFrames it
+// would put the morph's first frame at t > 1 — past the strip it travels to.
+func TestTheGreetingIsReachedAtFrameZero(t *testing.T) {
+	for name, m := range map[string]Model{"played out": played(fixture()), "cut short": greeted(fixture())} {
+		if m.stage != stageFullBleed {
+			t.Fatalf("%s: stage %d, want the greeting", name, m.stage)
+		}
+		if m.frame != 0 {
+			t.Errorf("%s: reached the greeting at frame %d", name, m.frame)
+		}
+	}
+}
+
+func TestAnyKeyLandsTheOpening(t *testing.T) {
+	next, cmd := fixture().Update(keyPress("x"))
+	if next.(Model).stage != stageFullBleed {
+		t.Fatal("a key during the opening must land the greeting at once")
+	}
+	if cmd != nil {
+		t.Fatal("the key that cut the opening short also acted")
+	}
+}
+
+func TestQuitKeysLeaveStraightFromTheOpening(t *testing.T) {
+	for _, k := range []string{"q", "esc", "ctrl+c"} {
+		next, cmd := fixture().Update(keyPress(k))
+		if cmd == nil {
+			t.Fatalf("%q during the opening returned no command", k)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Errorf("%q during the opening did not quit", k)
+		}
+		if !next.(Model).quit {
+			t.Errorf("%q during the opening did not mark the model quit", k)
+		}
+	}
+}
+
+func TestStaleOpeningTickIsIgnored(t *testing.T) {
+	next, cmd := greeted(fixture()).Update(openMsg{})
+	if cmd != nil || next.(Model).stage != stageFullBleed {
+		t.Fatal("a tick after the opening landed must do nothing")
+	}
+}
+
+func TestOpeningFrameFillsTheTerminal(t *testing.T) {
+	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m, _ = mustUpdate(t, m, openMsg{})
+	v := m.View().Content
+	if n := strings.Count(v, "\n") + 1; n != 30 {
+		t.Errorf("opening frame is %d lines, want 30", n)
+	}
+	if !hasBraille(v) {
+		t.Error("the opening frame drew nothing")
+	}
+	if strings.Contains(v, "UEFI") {
+		t.Error("lettering arrives with the settled greeting, not before it")
+	}
+}
+
+// The three phases must be distinguishable. Without this the sequence could
+// be one linear slide and every stage test above would still pass.
+func TestOpeningClosesThenHoldsThenOpens(t *testing.T) {
+	m, _ := mustUpdate(t, fixture(), tea.WindowSizeMsg{Width: 200, Height: 50})
+	spread := func(f int) float64 { m.frame = f; return m.openingPose().Spread }
+
+	if s := spread(0); s <= 1 {
+		t.Errorf("the opening starts past fully exploded, got Spread %v", s)
+	}
+	for f := 1; f <= convergeFrames; f++ {
+		if spread(f) > spread(f-1) {
+			t.Fatalf("frame %d re-opened the stack mid-close", f)
+		}
+	}
+	for f := convergeFrames; f <= convergeFrames+holdFrames; f++ {
+		if s := spread(f); s != 0 {
+			t.Fatalf("frame %d should hold the stack shut, got Spread %v", f, s)
+		}
+	}
+	for f := convergeFrames + holdFrames + 1; f <= openFrames; f++ {
+		if spread(f) < spread(f-1) {
+			t.Fatalf("frame %d closed the stack mid-explosion", f)
+		}
+	}
+	if s := spread(openFrames); s != 1 {
+		t.Errorf("the opening must end exactly at the greeting, got Spread %v", s)
 	}
 }

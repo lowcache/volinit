@@ -111,6 +111,19 @@ func StripPose(cols, rows int) Pose {
 	return Pose{CX: w / 2, CY: h / 2, R: fit(w, h, 0), Spread: 0}
 }
 
+// openSpread is how far past fully exploded the opening sequence begins.
+// At this spread the outer plates start beyond the canvas and fall inward;
+// Canvas.Set drops the dots that land outside.
+const openSpread = 1.9
+
+// OpeningPose is the greeting over-exploded: where the opening sequence
+// starts, and the only pose in it that is not the greeting's own.
+func OpeningPose(cols, rows int) Pose {
+	p, _ := GreetingPose(cols, rows)
+	p.Spread = openSpread
+	return p
+}
+
 // fit is the largest R whose stack fits a w×h dot canvas inside the margin,
 // or 0 when none does.
 func fit(w, h int, spread float64) int {
