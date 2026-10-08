@@ -31,8 +31,13 @@ noctalia msg templates-apply
 
 ## Usage
 
-Once enabled, volinit will read Material 3 neutrals, surface colors, and accents
-from `~/.config/volinit/palette.toml` whenever noctalia regenerates the theme.
+Once enabled, volinit reads Material 3 neutrals, surface colors, and accents
+from `~/.config/volinit/palette.toml` whenever Noctalia regenerates the theme.
+When `ttfx` is installed on `PATH` (or configured with `VOLINIT_TTFX`), its centered,
+responsive `decrypt` welcome animates `Volnix` over the primary, secondary, and
+surface-variant colors. Any key skips into the cockpit. The intro restarts on
+palette or terminal-size changes; the cockpit also polls the generated palette
+while open.
 The file (and its parent directory) is created automatically the first time the
 template is applied.
 

@@ -1,4 +1,4 @@
-// Package banner plays the ttfx-rs vhstape animation before the cockpit.
+// Package banner plays the ttfx-rs wormhole animation before the cockpit.
 package banner
 
 import (
@@ -103,5 +103,5 @@ func center(rows []string, width, height int) string {
 }
 
 func args() []string {
-	return []string{"--frame-rate", "120", "vhstape"}
+	return []string{"--frame-rate", "120", "wormhole"}
 }

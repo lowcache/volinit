@@ -73,7 +73,7 @@ func TestArtworkFallsBackOnNarrowTerminals(t *testing.T) {
 
 func TestArgsMatchTtfxRSCLI(t *testing.T) {
 	got := args()
-	want := []string{"--frame-rate", "120", "vhstape"}
+	want := []string{"--frame-rate", "120", "wormhole"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("ttfx-rs args = %v, want %v", got, want)
 	}

@@ -17,8 +17,9 @@ its layout to the terminal, and keeps telemetry deliberately minimal. Single bin
   packs with their own art and palettes.
 - **Runtime config**: optional config file, env vars, and CLI flags — with compiled-in
   defaults, so no config means the classic output.
-- **Silent probes**: OS, user, git branch (direct `.git/HEAD` parse, no subprocess),
-  battery — every probe falls back cleanly, nothing ever crashes the banner.
+- **Skippable Volnix welcome**: when `ttfx` is installed, a centered, responsive
+  decrypt animation shows `Volnix` and `by lowcache`, themed from Noctalia and
+  interruptible by any key before the cockpit takes over.
 - **Pipe-safe**: `volinit | cat` emits plain `key: value` text, no escape codes.
 - **Export & generate**: render the banner to ANSI/SVG files; build theme packs from
   any image via `jp2a`/`chafa`/`img2txt`.
@@ -86,7 +87,10 @@ volinit generate --from-image PATH [--output NAME]
 ## 🎨 Configuration
 
 Configuration is optional — with no config file and no flags the output is identical
-to the classic compiled-in banner. Precedence (highest wins):
+to the classic compiled-in banner. For the optional ttfx welcome, install `ttfx` on
+`PATH` (or set `VOLINIT_TTFX` to its executable). Its centered `decrypt` animation
+uses the Noctalia Material 3 palette and accepts any key to skip into the cockpit;
+the cockpit palette also reloads while it is open. Precedence (highest wins):
 
 1. CLI flags
 2. Environment: `VOLINIT_MODE`, `VOLINIT_THEME`, `VOLINIT_ANIMATE`
